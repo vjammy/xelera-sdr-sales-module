@@ -355,12 +355,34 @@ export async function getDashboardData(user: {
             }
 
             if (attentionRecipients.length > 1) {
+              const reviewedRecipients = attentionRecipients.filter(
+                (email) => inviteDigestRecipientIssueState.get(email)?.reviewState === "reviewed",
+              );
+              const activeRecipients = attentionRecipients.filter(
+                (email) => inviteDigestRecipientIssueState.get(email)?.reviewState === "active_issue",
+              );
+              const summaryParts = [
+                `Affected recipients: ${attentionRecipients.slice(0, 2).join(", ")}${
+                  attentionRecipients.length > 2 ? ` +${attentionRecipients.length - 2} more` : ""
+                }`,
+              ];
+
+              if (reviewedRecipients.length === 1) {
+                summaryParts.push(`Reviewed: ${reviewedRecipients[0]}`);
+              } else if (reviewedRecipients.length > 1) {
+                summaryParts.push(`${reviewedRecipients.length} reviewed`);
+              }
+
+              if (activeRecipients.length === 1) {
+                summaryParts.push(`Needs review: ${activeRecipients[0]}`);
+              } else if (activeRecipients.length > 1) {
+                summaryParts.push(`${activeRecipients.length} need review`);
+              }
+
               return {
                 detailLabel: "Open retry slice",
                 detailHref: `/admin/digests?state=${event.action}`,
-                recipientSummary: `Affected recipients: ${attentionRecipients.slice(0, 2).join(", ")}${
-                  attentionRecipients.length > 2 ? ` +${attentionRecipients.length - 2} more` : ""
-                }`,
+                recipientSummary: summaryParts.join(" - "),
               };
             }
 

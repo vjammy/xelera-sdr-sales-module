@@ -712,8 +712,13 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByRole("button", { name: "Mark issue reviewed" }).click();
   await expect(page.locator("[data-recipient-reviewed-banner]")).toContainText("Reviewed after repeated issues");
   await expect(page.getByRole("button", { name: "Reopen issue" })).toBeVisible();
-  await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
-  await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
+  await page.goto("/");
+  const reviewedRecipientActivity = page.locator("[data-dashboard-invite-activity]");
+  await expect(reviewedRecipientActivity).toContainText(
+    /Affected recipients: .*ava\.manager@xelera\.ai.* - Reviewed: ava\.manager@xelera\.ai/,
+  );
+  await reviewedRecipientActivity.getByRole("link", { name: "Open retry slice" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\?state=manual/);
   await expect(page.locator("[data-digest-ops-history]")).toContainText("Reviewed issue");
   await expect(page.locator("[data-digest-issue-summary]")).toContainText("Reviewed Recipient Issues");
   await page.getByRole("link", { name: /Reviewed Recipient Issues/i }).click();
