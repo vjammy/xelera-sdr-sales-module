@@ -5,6 +5,25 @@ import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
 import { canManageUsers } from "@/lib/permissions";
 
+function getRetryOutcomeLabel(args: {
+  deliveryState: string;
+  isTargetedRetry: boolean;
+}) {
+  if (!args.isTargetedRetry) {
+    return null;
+  }
+
+  if (args.deliveryState === "sent") {
+    return "Recovered on retry";
+  }
+
+  if (args.deliveryState === "manual" || args.deliveryState === "failed") {
+    return "Still needs attention";
+  }
+
+  return "Skipped on retry";
+}
+
 export default async function DigestOpsPage() {
   const user = await requireUser();
 
@@ -74,6 +93,16 @@ export default async function DigestOpsPage() {
                       {entry.alertCount} alerts
                     </div>
                   </div>
+                  {entry.isTargetedRetry ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-teal-900">
+                        Retry attempted
+                      </span>
+                      <p className="text-sm text-slate-600">
+                        Requested recipients: {entry.requestedRecipients.join(", ")}
+                      </p>
+                    </div>
+                  ) : null}
                   {entry.retryableRecipientCount > 0 ? (
                     <form action={retryInviteDigestRecipientsAction.bind(null, entry.id)} className="mt-4">
                       <button
@@ -114,7 +143,20 @@ export default async function DigestOpsPage() {
                         {entry.recipientDeliveries.map((delivery) => (
                           <tr key={delivery.id}>
                             <td className="px-4 py-3 text-slate-700">{delivery.email}</td>
-                            <td className="px-4 py-3 text-slate-700">{delivery.deliveryState.replaceAll("_", " ")}</td>
+                            <td className="px-4 py-3 text-slate-700">
+                              <div>{delivery.deliveryState.replaceAll("_", " ")}</div>
+                              {getRetryOutcomeLabel({
+                                deliveryState: delivery.deliveryState,
+                                isTargetedRetry: entry.isTargetedRetry,
+                              }) ? (
+                                <div className="mt-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+                                  {getRetryOutcomeLabel({
+                                    deliveryState: delivery.deliveryState,
+                                    isTargetedRetry: entry.isTargetedRetry,
+                                  })}
+                                </div>
+                              ) : null}
+                            </td>
                             <td className="px-4 py-3 text-slate-700">{delivery.preference.replaceAll("_", " ")}</td>
                             <td className="px-4 py-3 text-slate-700">
                               {delivery.alertCount} total · {delivery.staleCount} stale · {delivery.expiringSoonCount} soon

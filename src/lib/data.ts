@@ -216,6 +216,9 @@ export async function getOrganizationInviteDigestHistory(organizationId: string)
     const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
       ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
       : [];
+    const requestedRecipients = Array.isArray(metadata?.requestedRecipients)
+      ? (metadata.requestedRecipients.filter((entry) => typeof entry === "string") as string[])
+      : [];
 
     return {
       id: event.id,
@@ -227,6 +230,8 @@ export async function getOrganizationInviteDigestHistory(organizationId: string)
       recipients: Array.isArray(metadata?.recipients)
         ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
         : [],
+      requestedRecipients,
+      isTargetedRetry: requestedRecipients.length > 0,
       recipientDeliveries: recipientDeliveries.map((delivery, index) => ({
         id: `${event.id}-${index}`,
         email: typeof delivery.email === "string" ? delivery.email : "unknown",
