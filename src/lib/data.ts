@@ -222,16 +222,20 @@ function getHighestSeverityDetails(recipientDeliveries: Array<Record<string, unk
   }
 
   const hasFailedDelivery = attentionDeliveries.some((delivery) => delivery.deliveryState === "failed");
+  const highestSeverityCount = hasFailedDelivery
+    ? attentionDeliveries.filter((delivery) => delivery.deliveryState === "failed").length
+    : attentionDeliveries.filter((delivery) => delivery.deliveryState === "manual").length;
+  const recipientLabel = `${highestSeverityCount} recipient${highestSeverityCount === 1 ? "" : "s"}`;
 
   if (hasFailedDelivery) {
     return {
-      label: "Highest severity: Delivery failed",
+      label: `Highest severity: Delivery failed (${recipientLabel})`,
       tone: "warning" as const,
     };
   }
 
   return {
-    label: "Highest severity: Manual fallback",
+    label: `Highest severity: Manual fallback (${recipientLabel})`,
     tone: "neutral" as const,
   };
 }
@@ -445,9 +449,9 @@ export async function getDashboardData(user: {
         severityLabel: highestSeverity?.label,
         severityTone: highestSeverity?.tone,
         severityHref:
-          highestSeverity?.label === "Highest severity: Delivery failed" && highestPriorityRecipient
+          highestSeverity?.label?.startsWith("Highest severity: Delivery failed") && highestPriorityRecipient
             ? `/admin/digests?state=failed&recipient=${encodeURIComponent(highestPriorityRecipient)}`
-            : highestSeverity?.label === "Highest severity: Manual fallback" && highestPriorityRecipient
+            : highestSeverity?.label?.startsWith("Highest severity: Manual fallback") && highestPriorityRecipient
               ? `/admin/digests?state=manual&recipient=${encodeURIComponent(highestPriorityRecipient)}`
               : undefined,
         ...(event.action === "manual" || event.action === "failed"
