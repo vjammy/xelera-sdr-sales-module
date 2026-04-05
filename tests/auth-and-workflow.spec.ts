@@ -833,12 +833,19 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(readiness).toContainText("Manual fallback");
   await expect(readiness).toContainText("Mock provider mode");
   await expect(readiness).toContainText("Configured");
+  await expect(readiness).toContainText("RESEND_API_KEY");
+  await expect(readiness).toContainText("AI_PROVIDER");
+  await expect(readiness).toContainText("AI_API_KEY");
+  await expect(readiness).toContainText("Add auth email provider env");
+  await expect(readiness).toContainText("Add outbound email provider env");
+  await expect(readiness).toContainText("Add AI provider env");
 
   await page.goto("/");
   const dashboardReadiness = page.locator("[data-dashboard-provider-readiness]");
   await expect(dashboardReadiness).toBeVisible();
   await expect(dashboardReadiness).toContainText("Pilot infrastructure status");
   await expect(dashboardReadiness).toContainText("Mock provider mode");
+  await expect(dashboardReadiness).toContainText("RESEND_API_KEY");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

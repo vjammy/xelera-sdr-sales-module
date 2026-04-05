@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { processOutboundQueueNowAction, retryFailedSequenceEmailAction } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
@@ -78,6 +79,28 @@ export default async function SendOpsPage() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{item.detail}</p>
+                  {item.missingEnvNames?.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.missingEnvNames.map((envName) => (
+                        <code
+                          key={`${item.key}-${envName}`}
+                          className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
+                        >
+                          {envName}
+                        </code>
+                      ))}
+                    </div>
+                  ) : null}
+                  {item.actionLabel && item.actionHref ? (
+                    <div className="mt-3">
+                      <Link
+                        href={item.actionHref}
+                        className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+                      >
+                        {item.actionLabel}
+                      </Link>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

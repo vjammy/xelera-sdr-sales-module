@@ -6,6 +6,9 @@ export type ProviderReadinessItem = {
   statusLabel: string;
   tone: ReadinessTone;
   detail: string;
+  missingEnvNames?: string[];
+  actionLabel?: string;
+  actionHref?: string;
 };
 
 function hasEnv(name: string) {
@@ -32,6 +35,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         hasResendKey && hasAuthFrom
           ? "Magic-link sign-in can send through the configured email provider."
           : "Magic-link auth will fall back until RESEND_API_KEY is configured in this environment.",
+      missingEnvNames:
+        hasResendKey && hasAuthFrom
+          ? []
+          : ["RESEND_API_KEY", ...(hasAuthFrom ? [] : ["AUTH_FROM_EMAIL"])],
+      actionLabel: hasResendKey && hasAuthFrom ? undefined : "Add auth email provider env",
+      actionHref: hasResendKey && hasAuthFrom ? undefined : "/admin/sends",
     },
     {
       key: "outbound_email",
@@ -42,6 +51,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         hasResendKey && hasOutboundFrom
           ? "Approved outbound emails can send through the configured delivery provider."
           : "The outbound worker will use safe mock delivery until RESEND_API_KEY is configured.",
+      missingEnvNames:
+        hasResendKey && hasOutboundFrom
+          ? []
+          : ["RESEND_API_KEY", ...(hasOutboundFrom ? [] : ["OUTBOUND_FROM_EMAIL"])],
+      actionLabel: hasResendKey && hasOutboundFrom ? undefined : "Add outbound email provider env",
+      actionHref: hasResendKey && hasOutboundFrom ? undefined : "/admin/sends",
     },
     {
       key: "ai_generation",
@@ -54,6 +69,9 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
           : aiProvider === "mock"
             ? "Research and drafting are still using mock generation in this environment."
             : `AI provider "${aiProvider}" is selected, but AI_API_KEY is missing so the app will fall back to mock generation.`,
+      missingEnvNames: aiProvider !== "mock" && hasAiKey ? [] : aiProvider === "mock" ? ["AI_PROVIDER", "AI_API_KEY"] : ["AI_API_KEY"],
+      actionLabel: aiProvider !== "mock" && hasAiKey ? undefined : "Add AI provider env",
+      actionHref: aiProvider !== "mock" && hasAiKey ? undefined : "/admin/sends",
     },
     {
       key: "cron_protection",
@@ -64,6 +82,9 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         hasCronSecret
           ? "Protected cron routes can run with bearer-token authorization."
           : "CRON_SECRET is missing, so scheduled routes cannot be safely triggered in this environment.",
+      missingEnvNames: hasCronSecret ? [] : ["CRON_SECRET"],
+      actionLabel: hasCronSecret ? undefined : "Add cron auth env",
+      actionHref: hasCronSecret ? undefined : "/admin/sends",
     },
   ];
 }
