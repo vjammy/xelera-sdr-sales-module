@@ -294,6 +294,9 @@ export default async function Home() {
                     {item.title}
                   </Link>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                  {item.recipientSummary ? (
+                    <p className="mt-2 text-sm font-medium text-slate-700">{item.recipientSummary}</p>
+                  ) : null}
                   {item.detailHref && item.detailLabel ? (
                     <div className="mt-3">
                       <Link

@@ -248,6 +248,7 @@ export async function getDashboardData(user: {
     outcomeHref: string;
     detailLabel?: string;
     detailHref?: string;
+    recipientSummary?: string;
   }> = inviteActivity.map((event) => {
     const metadata =
       event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
@@ -328,6 +329,7 @@ export async function getDashboardData(user: {
               return {
                 detailLabel: "Open affected recipient",
                 detailHref: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
+                recipientSummary: `Affected recipient: ${attentionRecipients[0]}`,
               };
             }
 
@@ -335,6 +337,9 @@ export async function getDashboardData(user: {
               return {
                 detailLabel: "Open retry slice",
                 detailHref: `/admin/digests?state=${event.action}`,
+                recipientSummary: `Affected recipients: ${attentionRecipients.slice(0, 2).join(", ")}${
+                  attentionRecipients.length > 2 ? ` +${attentionRecipients.length - 2} more` : ""
+                }`,
               };
             }
 
