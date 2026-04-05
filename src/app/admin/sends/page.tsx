@@ -7,6 +7,18 @@ import { getOutboundOperationsData } from "@/lib/data";
 import { formatDate } from "@/lib/format";
 import { canManageUsers } from "@/lib/permissions";
 
+function getReadinessBadgeClasses(tone: "success" | "warning" | "neutral") {
+  if (tone === "success") {
+    return "bg-emerald-100 text-emerald-950";
+  }
+
+  if (tone === "warning") {
+    return "bg-amber-100 text-amber-950";
+  }
+
+  return "bg-slate-200 text-slate-800";
+}
+
 export default async function SendOpsPage() {
   const user = await requireUser();
 
@@ -45,6 +57,30 @@ export default async function SendOpsPage() {
                 Process outbound queue now
               </button>
             </form>
+          </article>
+
+          <article
+            data-send-ops-provider-readiness
+            className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40"
+          >
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Provider Readiness</p>
+            <div className="mt-5 space-y-3">
+              {outbound.providerReadiness.map((item) => (
+                <article key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-base font-semibold text-slate-950">{item.label}</p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getReadinessBadgeClasses(
+                        item.tone,
+                      )}`}
+                    >
+                      {item.statusLabel}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.detail}</p>
+                </article>
+              ))}
+            </div>
           </article>
 
           <article className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40">

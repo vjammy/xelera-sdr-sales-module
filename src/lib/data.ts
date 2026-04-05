@@ -1,5 +1,6 @@
 import { getInviteHygieneAlerts } from "@/lib/invite-hygiene";
 import { canViewAllWork } from "@/lib/permissions";
+import { getProviderReadiness } from "@/lib/provider-readiness";
 import { prisma } from "@/lib/prisma";
 import { expireInviteIfNeeded } from "@/lib/invites";
 
@@ -611,6 +612,7 @@ export async function getDashboardData(user: {
     expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
     inviteIssueSummary,
     inviteActivity: inviteActivityItems,
+    providerReadiness: getProviderReadiness(),
     outboundActivity: outboundActivity.map((event) => ({
       id: event.id,
       createdAt: event.createdAt,
@@ -686,6 +688,7 @@ export async function getOutboundOperationsData(user: {
   ]);
 
   return {
+    providerReadiness: getProviderReadiness(),
     queued: emails.filter((email) => email.sendStatus === "queued" || email.sendStatus === "sending"),
     failed: emails.filter((email) => email.sendStatus === "failed"),
     emails,

@@ -39,7 +39,7 @@ function getSeverityBadgeClasses(tone: "warning" | "neutral") {
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity, outboundActivity } =
+  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity, outboundActivity, providerReadiness } =
     await getDashboardData(user);
 
   return (
@@ -355,6 +355,44 @@ export default async function Home() {
                       </Link>
                     </div>
                   ) : null}
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {canManageUsers(user.role) ? (
+          <div
+            data-dashboard-provider-readiness
+            className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50/90 px-5 py-5"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Provider Readiness</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Pilot infrastructure status without opening environment settings
+                </h2>
+              </div>
+              <Link
+                href="/admin/sends"
+                className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              >
+                Open send operations
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {providerReadiness.map((item) => (
+                <article key={item.key} className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-base font-semibold text-slate-950">{item.label}</p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getActivityBadgeClasses(
+                        item.tone,
+                      )}`}
+                    >
+                      {item.statusLabel}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.detail}</p>
                 </article>
               ))}
             </div>

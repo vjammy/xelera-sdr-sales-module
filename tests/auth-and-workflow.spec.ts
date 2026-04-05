@@ -820,6 +820,27 @@ test("manager can retry a failed outbound email from send operations", async ({ 
   await expect(page.getByText("Simulated outbound delivery failure.").first()).toBeVisible();
 });
 
+test("manager can see provider readiness from send operations", async ({ page }) => {
+  await login(page, "ava.manager@xelera.ai");
+
+  await page.goto("/admin/sends");
+  const readiness = page.locator("[data-send-ops-provider-readiness]");
+  await expect(readiness).toBeVisible();
+  await expect(readiness).toContainText("Auth sign-in email");
+  await expect(readiness).toContainText("Outbound email delivery");
+  await expect(readiness).toContainText("AI research and drafting");
+  await expect(readiness).toContainText("Cron protection");
+  await expect(readiness).toContainText("Manual fallback");
+  await expect(readiness).toContainText("Mock provider mode");
+  await expect(readiness).toContainText("Configured");
+
+  await page.goto("/");
+  const dashboardReadiness = page.locator("[data-dashboard-provider-readiness]");
+  await expect(dashboardReadiness).toBeVisible();
+  await expect(dashboardReadiness).toContainText("Pilot infrastructure status");
+  await expect(dashboardReadiness).toContainText("Mock provider mode");
+});
+
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
   test.setTimeout(90000);
   const suffix = Date.now();
