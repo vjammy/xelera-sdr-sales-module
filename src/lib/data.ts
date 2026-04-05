@@ -195,13 +195,31 @@ export async function getDashboardData(user: {
     }),
   ]);
 
-  const [inviteHygiene, inviteDigestRecipientIssueState] =
+  const [inviteHygiene, inviteDigestRecipientIssueState, inviteActivity] =
     user.role === "sales_manager" || user.role === "admin_operator"
       ? await Promise.all([
           getInviteHygieneAlerts(user.organizationId),
           getInviteDigestRecipientIssueState(user.organizationId),
+          prisma.auditEvent.findMany({
+            where: {
+              organizationId: user.organizationId,
+              entityType: {
+                in: ["invite_hygiene_dashboard", "invite_hygiene_digest"],
+              },
+            },
+            include: {
+              actor: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 4,
+          }),
         ])
-      : [{ staleAlerts: [], expiringSoonAlerts: [], alerts: [] }, new Map()];
+      : [{ staleAlerts: [], expiringSoonAlerts: [], alerts: [] }, new Map(), []];
 
   const inviteIssueSummary = Array.from(inviteDigestRecipientIssueState.values()).reduce(
     (summary, issueState) => {
@@ -218,6 +236,54 @@ export async function getDashboardData(user: {
     { activeIssueCount: 0, reviewedIssueCount: 0 },
   );
 
+  const inviteActivityItems = inviteActivity.map((event) => {
+    const metadata =
+      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? (event.metadata as Record<string, unknown>)
+        : null;
+
+    if (event.entityType === "invite_hygiene_dashboard" && event.action === "rotated_expiring_invites") {
+      const inviteCount = typeof metadata?.inviteCount === "number" ? metadata.inviteCount : 0;
+
+      return {
+        id: event.id,
+        createdAt: event.createdAt,
+        actorName: event.actor?.name ?? event.actor?.email ?? "Manager",
+        title: `Rotated ${inviteCount} expiring invite${inviteCount === 1 ? "" : "s"}`,
+        description:
+          inviteCount > 0
+            ? "Expiring activation links were refreshed from the dashboard."
+            : "No expiring activation links needed rotation.",
+        href: "/admin/users?attention=expiring_soon",
+      };
+    }
+
+    const alertCount = typeof metadata?.alertCount === "number" ? metadata.alertCount : 0;
+    const recipients = Array.isArray(metadata?.recipients)
+      ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
+      : [];
+    const recipientCount = recipients.length;
+    const actionLabel =
+      event.action === "sent"
+        ? "Digest emailed"
+        : event.action === "manual"
+          ? "Digest fell back to manual delivery"
+          : event.action === "failed"
+            ? "Digest delivery failed"
+            : "Digest skipped";
+
+    return {
+      id: event.id,
+      createdAt: event.createdAt,
+      actorName: event.actor?.name ?? event.actor?.email ?? "System",
+      title: actionLabel,
+      description: `${alertCount} alert${alertCount === 1 ? "" : "s"} across ${recipientCount} recipient${
+        recipientCount === 1 ? "" : "s"
+      }.`,
+      href: "/admin/digests",
+    };
+  });
+
   return {
     leadLists,
     metrics: {
@@ -231,6 +297,7 @@ export async function getDashboardData(user: {
     staleInviteAlerts: inviteHygiene.staleAlerts.slice(0, 5),
     expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
     inviteIssueSummary,
+    inviteActivity: inviteActivityItems,
   };
 }
 

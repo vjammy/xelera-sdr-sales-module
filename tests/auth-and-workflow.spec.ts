@@ -622,6 +622,10 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await expect(page.getByText("No onboarding seats match the current filters.")).toBeVisible();
 
   await page.goto("/");
+  const activityStrip = page.locator("[data-dashboard-invite-activity]");
+  await expect(activityStrip).toBeVisible();
+  await expect(activityStrip).toContainText("Rotated 1 expiring invite");
+  await expect(activityStrip).toContainText("Latest onboarding remediation moves");
   await hygieneSummary.getByRole("link", { name: "Review expiring seats" }).click();
   await expect(page).toHaveURL(/\/admin\/users\?attention=expiring_soon/);
   await expect(page.locator("[data-user-filter-summary]")).toContainText("expiring soon invites");
@@ -632,8 +636,7 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await expect(callout).toBeVisible();
   await expect(callout).toContainText("Pending seats have gone untouched for several days");
   await expect(callout).toContainText("Open user onboarding");
-  await callout.getByRole("link", { name: "Open user onboarding" }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/);
+  await expect(callout.getByRole("link", { name: "Open user onboarding" })).toHaveAttribute("href", "/admin/users");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

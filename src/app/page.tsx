@@ -19,7 +19,7 @@ function formatInviteAge(date: Date) {
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary } =
+  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity } =
     await getDashboardData(user);
 
   return (
@@ -234,6 +234,42 @@ export default async function Home() {
                   Repeated delivery issues that have already been acknowledged by a manager.
                 </p>
               </Link>
+            </div>
+          </div>
+        ) : null}
+        {canManageUsers(user.role) && inviteActivity.length ? (
+          <div
+            data-dashboard-invite-activity
+            className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50/90 px-5 py-5"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Invite Activity</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Latest onboarding remediation moves
+                </h2>
+              </div>
+              <Link
+                href="/admin/digests"
+                className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              >
+                Open digest operations
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {inviteActivity.map((item) => (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {formatDate(item.createdAt)} by {item.actorName}
+                  </p>
+                  <p className="mt-2 text-lg font-semibold text-slate-950">{item.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                </Link>
+              ))}
             </div>
           </div>
         ) : null}
