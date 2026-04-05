@@ -7,6 +7,7 @@ import { getOrganizationInviteDigestHistory } from "@/lib/data";
 import { canManageUsers } from "@/lib/permissions";
 
 type DigestFilterState = "all" | "sent" | "manual" | "failed" | "skipped" | "retry";
+const DIGESTS_PER_PAGE = 6;
 
 function normalizeFilterState(value?: string): DigestFilterState {
   if (value === "sent" || value === "manual" || value === "failed" || value === "skipped" || value === "retry") {
@@ -14,6 +15,16 @@ function normalizeFilterState(value?: string): DigestFilterState {
   }
 
   return "all";
+}
+
+function normalizePageNumber(value?: string) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
 }
 
 function matchesRecipientFilter(
@@ -50,6 +61,45 @@ function filterDigestHistory(
   });
 }
 
+function paginateDigestHistory(
+  history: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>,
+  page: number,
+) {
+  const totalPages = Math.max(1, Math.ceil(history.length / DIGESTS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * DIGESTS_PER_PAGE;
+
+  return {
+    currentPage,
+    totalPages,
+    paginatedHistory: history.slice(startIndex, startIndex + DIGESTS_PER_PAGE),
+  };
+}
+
+function buildDigestHref(args: {
+  page: number;
+  state: DigestFilterState;
+  recipientQuery: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (args.page > 1) {
+    params.set("page", String(args.page));
+  }
+
+  if (args.state !== "all") {
+    params.set("state", args.state);
+  }
+
+  if (args.recipientQuery) {
+    params.set("recipient", args.recipientQuery);
+  }
+
+  const query = params.toString();
+
+  return query ? `/admin/digests?${query}` : "/admin/digests";
+}
+
 function getRetryOutcomeLabel(args: {
   deliveryState: string;
   isTargetedRetry: boolean;
@@ -70,7 +120,7 @@ function getRetryOutcomeLabel(args: {
 }
 
 export default async function DigestOpsPage(props: {
-  searchParams?: Promise<{ state?: string; recipient?: string }>;
+  searchParams?: Promise<{ state?: string; recipient?: string; page?: string }>;
 }) {
   const user = await requireUser();
 
@@ -81,8 +131,10 @@ export default async function DigestOpsPage(props: {
   const searchParams = (await props.searchParams) ?? {};
   const filterState = normalizeFilterState(searchParams.state);
   const recipientQuery = searchParams.recipient?.trim() ?? "";
+  const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getOrganizationInviteDigestHistory(user.organizationId);
   const filteredHistory = filterDigestHistory(history, filterState, recipientQuery);
+  const { currentPage, totalPages, paginatedHistory } = paginateDigestHistory(filteredHistory, requestedPage);
   const formatter = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -145,6 +197,7 @@ export default async function DigestOpsPage(props: {
                 className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
               />
             </label>
+            <input type="hidden" name="page" value="1" />
             <button
               type="submit"
               className="self-end rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
@@ -165,10 +218,21 @@ export default async function DigestOpsPage(props: {
               {recipientQuery ? `${filterState !== "all" ? " matching" : " matching"} "${recipientQuery}"` : ""}.
             </p>
           ) : null}
-
           {filteredHistory.length ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+              <p data-digest-page-summary>
+                Page {currentPage} of {totalPages}
+              </p>
+              <p>
+                Showing {paginatedHistory.length} of {filteredHistory.length} matching run
+                {filteredHistory.length === 1 ? "" : "s"}.
+              </p>
+            </div>
+          ) : null}
+
+          {paginatedHistory.length ? (
             <div className="mt-6 space-y-4" data-digest-ops-history>
-              {filteredHistory.map((entry) => (
+              {paginatedHistory.map((entry) => (
                 <article
                   key={entry.id}
                   className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5"
@@ -274,6 +338,60 @@ export default async function DigestOpsPage(props: {
                 : "No invite hygiene digest runs have been recorded for this organization yet."}
             </p>
           )}
+          {totalPages > 1 ? (
+            <nav className="mt-6 flex flex-wrap items-center justify-between gap-3" aria-label="Digest history pagination">
+              <Link
+                href={buildDigestHref({
+                  page: Math.max(1, currentPage - 1),
+                  state: filterState,
+                  recipientQuery,
+                })}
+                aria-disabled={currentPage === 1}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  currentPage === 1
+                    ? "pointer-events-none border border-slate-200 bg-slate-100 text-slate-400"
+                    : "border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                Newer runs
+              </Link>
+              <div className="flex items-center gap-2 text-sm text-slate-600" data-digest-pagination>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                  <Link
+                    key={pageNumber}
+                    href={buildDigestHref({
+                      page: pageNumber,
+                      state: filterState,
+                      recipientQuery,
+                    })}
+                    aria-current={pageNumber === currentPage ? "page" : undefined}
+                    className={`rounded-full px-3 py-1.5 font-semibold transition ${
+                      pageNumber === currentPage
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </Link>
+                ))}
+              </div>
+              <Link
+                href={buildDigestHref({
+                  page: Math.min(totalPages, currentPage + 1),
+                  state: filterState,
+                  recipientQuery,
+                })}
+                aria-disabled={currentPage === totalPages}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  currentPage === totalPages
+                    ? "pointer-events-none border border-slate-200 bg-slate-100 text-slate-400"
+                    : "border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                Older runs
+              </Link>
+            </nav>
+          ) : null}
         </article>
       </section>
     </WorkspaceShell>

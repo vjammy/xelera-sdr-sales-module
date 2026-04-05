@@ -598,6 +598,20 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(filteredHistory).toContainText("Retry attempted");
   await expect(filteredHistory).toContainText("ava.manager@xelera.ai");
   await expect(filteredHistory).not.toContainText("Digest emailed");
+
+  for (let index = 0; index < 4; index += 1) {
+    const digestCountBeforeExtraRun = await countInviteDigestEvents();
+    await page.goto("/admin/digests");
+    await page.getByRole("button", { name: "Run digest now" }).click();
+    await expect
+      .poll(async () => await countInviteDigestEvents())
+      .toBeGreaterThan(digestCountBeforeExtraRun);
+  }
+
+  await page.goto("/admin/digests?page=2");
+  await expect(page.locator("[data-digest-page-summary]")).toContainText("Page 2");
+  await expect(page.locator("[data-digest-pagination]")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Newer runs" })).toBeVisible();
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

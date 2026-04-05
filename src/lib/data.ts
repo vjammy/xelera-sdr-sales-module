@@ -205,7 +205,6 @@ export async function getOrganizationInviteDigestHistory(organizationId: string)
       entityType: "invite_hygiene_digest",
     },
     orderBy: { createdAt: "desc" },
-    take: 12,
   });
 
   return events.map((event) => {
