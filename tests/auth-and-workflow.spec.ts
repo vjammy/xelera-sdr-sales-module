@@ -169,9 +169,11 @@ test("manager can onboard a new organization user through invite activation", as
 
   await expect(page.getByText(email)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(name)).toBeVisible();
-  const userCard = page.locator("article", { hasText: email }).first();
+  const activationLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  const userCard = activationLink.locator("xpath=ancestor::article[1]");
   await expect(userCard).toContainText(/Manual share required\.|Email sent/);
-  const activationLink = userCard.locator(`a[data-invite-email="${email}"]`).first();
+  await userCard.getByRole("button", { name: "Retry invite delivery" }).click();
+  await expect(userCard).toContainText(/Manual share required\.|Email sent/);
   await expect(activationLink).toBeVisible();
 
   const activationUrl = await activationLink.getAttribute("href");

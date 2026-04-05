@@ -51,6 +51,67 @@ const activationSchema = z
     path: ["confirmPassword"],
   });
 
+async function attemptInviteDelivery(args: {
+  inviteId: string;
+  organizationId: string;
+  actorId: string;
+  actorName: string;
+  actorEmail: string;
+}) {
+  const invite = await prisma.userInvite.findUnique({
+    where: { id: args.inviteId },
+    include: {
+      user: true,
+      organization: true,
+    },
+  });
+
+  if (!invite || invite.organizationId !== args.organizationId || invite.status !== "pending") {
+    throw new Error("This invite is no longer eligible for delivery.");
+  }
+
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const activationUrl = `${appUrl}/activate/${invite.token}`;
+
+  const delivery = await deliverInviteEmail({
+    activationUrl,
+    expiresAt: invite.expiresAt,
+    inviteeEmail: invite.user.email,
+    inviteeName: invite.user.name,
+    invitedByName: args.actorName || args.actorEmail,
+    organizationName: invite.organization.name,
+    roleLabel: invite.user.role.replaceAll("_", " "),
+  });
+
+  await prisma.userInvite.update({
+    where: { id: invite.id },
+    data: {
+      deliveryState: delivery.state,
+      deliveryError: delivery.state === "failed" ? delivery.reason : delivery.state === "manual" ? delivery.reason : null,
+      deliveredAt: delivery.state === "sent" ? new Date() : null,
+      lastDeliveryAttemptAt: new Date(),
+    },
+  });
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: invite.organizationId,
+      actorId: args.actorId,
+      entityType: "user_invite",
+      entityId: invite.id,
+      action: "delivery_updated",
+      metadata: {
+        email: invite.user.email,
+        deliveryState: delivery.state,
+        deliveryReason: "reason" in delivery ? delivery.reason : null,
+        providerMessageId: "providerMessageId" in delivery ? delivery.providerMessageId : null,
+      },
+    },
+  });
+}
+
 export async function createLeadListAction(formData: FormData) {
   const user = await requireUser();
   const file = formData.get("file");
@@ -343,10 +404,6 @@ export async function createUserInviteAction(formData: FormData) {
 
   const inviteToken = crypto.randomBytes(24).toString("hex");
   const inviteExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  const activationUrl = `${appUrl}/activate/${inviteToken}`;
 
   const createdInvite = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
@@ -392,41 +449,30 @@ export async function createUserInviteAction(formData: FormData) {
 
     return invite;
   });
-
-  const delivery = await deliverInviteEmail({
-    activationUrl,
-    expiresAt: inviteExpiresAt,
-    inviteeEmail: createdInvite.user.email,
-    inviteeName: createdInvite.user.name,
-    invitedByName: user.name || user.email,
-    organizationName: createdInvite.organization.name,
-    roleLabel: parsed.role.replaceAll("_", " "),
+  await attemptInviteDelivery({
+    inviteId: createdInvite.id,
+    organizationId: user.organizationId,
+    actorId: user.id,
+    actorName: user.name || "",
+    actorEmail: user.email,
   });
 
-  await prisma.userInvite.update({
-    where: { id: createdInvite.id },
-    data: {
-      deliveryState: delivery.state,
-      deliveryError: delivery.state === "failed" ? delivery.reason : delivery.state === "manual" ? delivery.reason : null,
-      deliveredAt: delivery.state === "sent" ? new Date() : null,
-      lastDeliveryAttemptAt: new Date(),
-    },
-  });
+  revalidatePath("/admin/users");
+}
 
-  await prisma.auditEvent.create({
-    data: {
-      organizationId: user.organizationId,
-      actorId: user.id,
-      entityType: "user_invite",
-      entityId: createdInvite.id,
-      action: "delivery_updated",
-      metadata: {
-        email: createdInvite.user.email,
-        deliveryState: delivery.state,
-        deliveryReason: "reason" in delivery ? delivery.reason : null,
-        providerMessageId: "providerMessageId" in delivery ? delivery.providerMessageId : null,
-      },
-    },
+export async function resendUserInviteAction(inviteId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  await attemptInviteDelivery({
+    inviteId,
+    organizationId: user.organizationId,
+    actorId: user.id,
+    actorName: user.name || "",
+    actorEmail: user.email,
   });
 
   revalidatePath("/admin/users");
