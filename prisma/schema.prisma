@@ -70,6 +70,12 @@ enum InviteStatus {
   expired
 }
 
+enum InviteDeliveryState {
+  manual
+  sent
+  failed
+}
+
 model Organization {
   id               String              @id @default(cuid())
   name             String
@@ -140,6 +146,10 @@ model UserInvite {
   invitedById    String?
   token          String        @unique
   status         InviteStatus  @default(pending)
+  deliveryState  InviteDeliveryState @default(manual)
+  deliveryError  String?
+  deliveredAt    DateTime?
+  lastDeliveryAttemptAt DateTime?
   expiresAt      DateTime
   acceptedAt     DateTime?
   createdAt      DateTime      @default(now())

@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { deliverInviteEmail } from "@/lib/email";
 import { parseLeadFile } from "@/lib/importer";
 import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -342,8 +343,12 @@ export async function createUserInviteAction(formData: FormData) {
 
   const inviteToken = crypto.randomBytes(24).toString("hex");
   const inviteExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const activationUrl = `${appUrl}/activate/${inviteToken}`;
 
-  await prisma.$transaction(async (tx) => {
+  const createdInvite = await prisma.$transaction(async (tx) => {
     const createdUser = await tx.user.create({
       data: {
         organizationId: user.organizationId,
@@ -356,13 +361,17 @@ export async function createUserInviteAction(formData: FormData) {
       },
     });
 
-    await tx.userInvite.create({
+    const invite = await tx.userInvite.create({
       data: {
         organizationId: user.organizationId,
         userId: createdUser.id,
         invitedById: user.id,
         token: inviteToken,
         expiresAt: inviteExpiresAt,
+      },
+      include: {
+        user: true,
+        organization: true,
       },
     });
 
@@ -380,6 +389,44 @@ export async function createUserInviteAction(formData: FormData) {
         },
       },
     });
+
+    return invite;
+  });
+
+  const delivery = await deliverInviteEmail({
+    activationUrl,
+    expiresAt: inviteExpiresAt,
+    inviteeEmail: createdInvite.user.email,
+    inviteeName: createdInvite.user.name,
+    invitedByName: user.name || user.email,
+    organizationName: createdInvite.organization.name,
+    roleLabel: parsed.role.replaceAll("_", " "),
+  });
+
+  await prisma.userInvite.update({
+    where: { id: createdInvite.id },
+    data: {
+      deliveryState: delivery.state,
+      deliveryError: delivery.state === "failed" ? delivery.reason : delivery.state === "manual" ? delivery.reason : null,
+      deliveredAt: delivery.state === "sent" ? new Date() : null,
+      lastDeliveryAttemptAt: new Date(),
+    },
+  });
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: user.organizationId,
+      actorId: user.id,
+      entityType: "user_invite",
+      entityId: createdInvite.id,
+      action: "delivery_updated",
+      metadata: {
+        email: createdInvite.user.email,
+        deliveryState: delivery.state,
+        deliveryReason: "reason" in delivery ? delivery.reason : null,
+        providerMessageId: "providerMessageId" in delivery ? delivery.providerMessageId : null,
+      },
+    },
   });
 
   revalidatePath("/admin/users");

@@ -72,6 +72,22 @@ export default async function UsersPage() {
                         Expires {formatter.format(member.invites[0].expiresAt)}
                       </p>
                     </div>
+                    <div className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-slate-700">
+                      {member.invites[0].deliveryState === "sent" ? (
+                        <p>
+                          Email sent {member.invites[0].deliveredAt ? formatter.format(member.invites[0].deliveredAt) : "recently"}.
+                        </p>
+                      ) : member.invites[0].deliveryState === "failed" ? (
+                        <p>
+                          Email delivery failed. Share the activation link manually for now.
+                          {member.invites[0].deliveryError ? ` ${member.invites[0].deliveryError}` : ""}
+                        </p>
+                      ) : (
+                        <p>
+                          Manual share required. Configure `RESEND_API_KEY` and `INVITE_FROM_EMAIL` to send invites automatically.
+                        </p>
+                      )}
+                    </div>
                     <a
                       href={`${appUrl}/activate/${member.invites[0].token}`}
                       data-invite-email={member.email}
@@ -89,6 +105,10 @@ export default async function UsersPage() {
         <article className="rounded-[32px] bg-slate-950 p-8 text-white">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-300">Invite Seat</p>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">Create a user and hand off activation</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-300">
+            If email delivery is configured, Xelera will send the activation link automatically. Otherwise the
+            link will still be generated here for manual sharing.
+          </p>
           {canManageUsers(user.role) ? (
             <form action={createUserInviteAction} className="mt-6 space-y-4">
               <input
