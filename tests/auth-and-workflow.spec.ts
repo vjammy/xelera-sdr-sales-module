@@ -135,6 +135,27 @@ async function createInviteDigestEventForTest(args: {
   });
 }
 
+async function clearProviderVerificationEvents(providerKey: "auth_email" | "outbound_email" | "ai_generation" | "cron_protection") {
+  const manager = await db.user.findUnique({
+    where: { email: "ava.manager@xelera.ai" },
+    select: {
+      organizationId: true,
+    },
+  });
+
+  if (!manager) {
+    throw new Error("Expected seeded manager account for provider verification setup.");
+  }
+
+  await db.auditEvent.deleteMany({
+    where: {
+      organizationId: manager.organizationId,
+      entityType: "provider_setup_verification",
+      entityId: providerKey,
+    },
+  });
+}
+
 async function getLatestPendingInvite(email: string) {
   return db.userInvite.findFirst({
     where: {
@@ -821,6 +842,7 @@ test("manager can retry a failed outbound email from send operations", async ({ 
 });
 
 test("manager can see provider readiness from send operations", async ({ page }) => {
+  await clearProviderVerificationEvents("cron_protection");
   await login(page, "ava.manager@xelera.ai");
 
   await page.goto("/admin/sends");
@@ -836,6 +858,7 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(readiness).toContainText("RESEND_API_KEY");
   await expect(readiness).toContainText("AI_PROVIDER");
   await expect(readiness).toContainText("AI_API_KEY");
+  await expect(readiness).toContainText("Needs verification");
   await readiness.getByRole("link", { name: "Open auth email setup" }).click();
   await expect(page).toHaveURL(/\/admin\/setup#auth_email/);
   const setupChecklist = page.locator("[data-admin-setup-checklist]");
@@ -851,6 +874,12 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(setupChecklist).toContainText("Verify AI generation");
   await expect(setupChecklist).toContainText("Verify protected cron behavior");
   await expect(setupChecklist).toContainText("Call the cron route with the configured bearer token");
+  const cronVerificationState = page.locator('[data-provider-verification-state="cron_protection"]');
+  await expect(cronVerificationState).toContainText("Needs verification");
+  await cronVerificationState.getByRole("button", { name: "Mark verified" }).click();
+  await expect(cronVerificationState).toContainText("Verified");
+  await expect(cronVerificationState).toContainText("Marked verified by Ava Manager");
+  await expect(cronVerificationState.getByRole("button", { name: "Reopen verification" })).toBeVisible();
 
   await page.goto("/");
   const dashboardReadiness = page.locator("[data-dashboard-provider-readiness]");
@@ -858,8 +887,14 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(dashboardReadiness).toContainText("Pilot infrastructure status");
   await expect(dashboardReadiness).toContainText("Mock provider mode");
   await expect(dashboardReadiness).toContainText("RESEND_API_KEY");
+  await expect(dashboardReadiness).toContainText("Verified");
+  await expect(dashboardReadiness).toContainText("Marked verified by Ava Manager");
   await dashboardReadiness.getByRole("link", { name: "Open AI setup" }).click();
   await expect(page).toHaveURL(/\/admin\/setup#ai_generation/);
+  await page.goto("/admin/setup#cron_protection");
+  await cronVerificationState.getByRole("button", { name: "Reopen verification" }).click();
+  await expect(cronVerificationState).toContainText("Needs recheck");
+  await expect(cronVerificationState).toContainText("Verification was reopened by Ava Manager");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

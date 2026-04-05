@@ -612,7 +612,7 @@ export async function getDashboardData(user: {
     expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
     inviteIssueSummary,
     inviteActivity: inviteActivityItems,
-    providerReadiness: getProviderReadiness(),
+    providerReadiness: await getProviderReadiness(user.organizationId),
     outboundActivity: outboundActivity.map((event) => ({
       id: event.id,
       createdAt: event.createdAt,
@@ -688,7 +688,7 @@ export async function getOutboundOperationsData(user: {
   ]);
 
   return {
-    providerReadiness: getProviderReadiness(),
+    providerReadiness: await getProviderReadiness(user.organizationId),
     queued: emails.filter((email) => email.sendStatus === "queued" || email.sendStatus === "sending"),
     failed: emails.filter((email) => email.sendStatus === "failed"),
     emails,

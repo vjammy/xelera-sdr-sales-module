@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { updateProviderVerificationAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getProviderReadiness } from "@/lib/provider-readiness";
+import { formatDate } from "@/lib/format";
 import { canManageUsers } from "@/lib/permissions";
 
 function getReadinessBadgeClasses(tone: "success" | "warning" | "neutral") {
@@ -24,7 +26,7 @@ export default async function SetupPage() {
     notFound();
   }
 
-  const readiness = getProviderReadiness();
+  const readiness = await getProviderReadiness(user.organizationId);
 
   return (
     <WorkspaceShell user={user}>
@@ -130,6 +132,41 @@ export default async function SetupPage() {
                     </div>
                   </div>
                 ) : null}
+                <div data-provider-verification-state={item.key} className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Verification status</p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getReadinessBadgeClasses(
+                        item.verificationTone,
+                      )}`}
+                    >
+                      {item.verificationStatusLabel}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-700">{item.verificationDetail}</p>
+                  {item.verificationCreatedAt ? (
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                      Last updated {formatDate(item.verificationCreatedAt, "MMM d, yyyy h:mm a")}
+                    </p>
+                  ) : null}
+                  {item.verificationActionLabel ? (
+                    <form
+                      action={updateProviderVerificationAction.bind(
+                        null,
+                        item.key,
+                        item.verificationState === "verified" ? "reopened" : "verified",
+                      )}
+                      className="mt-4"
+                    >
+                      <button
+                        type="submit"
+                        className="rounded-full border border-slate-300 bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:border-slate-400 hover:bg-slate-800"
+                      >
+                        {item.verificationActionLabel}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>

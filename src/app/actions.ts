@@ -25,6 +25,7 @@ import {
   setSequenceStatus,
   updateSequenceContent,
 } from "@/lib/workflows";
+import type { ProviderReadinessKey } from "@/lib/provider-readiness";
 
 const productSchema = z.object({
   name: z.string().min(2),
@@ -47,6 +48,7 @@ const userSchema = z.object({
 });
 
 const digestPreferenceSchema = z.nativeEnum(InviteDigestPreference);
+const providerReadinessKeySchema = z.enum(["auth_email", "outbound_email", "ai_generation", "cron_protection"]);
 
 const activationSchema = z
   .object({
@@ -551,6 +553,37 @@ export async function processOutboundQueueNowAction() {
   revalidatePath("/");
   revalidatePath("/lists");
   revalidatePath("/admin/sends");
+}
+
+export async function updateProviderVerificationAction(
+  providerKey: ProviderReadinessKey,
+  nextState: "verified" | "reopened",
+) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to update provider verification.");
+  }
+
+  const parsedKey = providerReadinessKeySchema.parse(providerKey);
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: user.organizationId,
+      actorId: user.id,
+      entityType: "provider_setup_verification",
+      entityId: parsedKey,
+      action: nextState,
+      metadata: {
+        actorName: user.name,
+        actorEmail: user.email,
+      },
+    },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin/sends");
+  revalidatePath("/admin/setup");
 }
 
 export async function bulkApproveAction(formData: FormData) {

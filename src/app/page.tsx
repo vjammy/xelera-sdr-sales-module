@@ -393,6 +393,16 @@ export default async function Home() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{item.detail}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getActivityBadgeClasses(
+                        item.verificationTone,
+                      )}`}
+                    >
+                      {item.verificationStatusLabel}
+                    </span>
+                    <span className="text-xs text-slate-500">{item.verificationDetail}</span>
+                  </div>
                   {item.missingEnvNames?.length ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {item.missingEnvNames.slice(0, 2).map((envName) => (
