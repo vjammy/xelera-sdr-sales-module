@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/process-outbound-email",
-      "schedule": "*/30 * * * *"
+      "schedule": "30 13 * * *"
     }
   ]
 }
