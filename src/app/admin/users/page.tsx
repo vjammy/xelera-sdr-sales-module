@@ -1,5 +1,5 @@
 import { UserRole } from "@prisma/client";
-import { createUserInviteAction, resendUserInviteAction, revokeUserInviteAction } from "@/app/actions";
+import { createReplacementInviteAction, createUserInviteAction, resendUserInviteAction, revokeUserInviteAction } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
@@ -39,88 +39,121 @@ export default async function UsersPage() {
           </p>
 
           <div className="mt-6 space-y-4">
-            {users.map((member) => (
-              <article key={member.id} className="rounded-[26px] border border-slate-200 bg-slate-50/80 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-semibold text-slate-950">{member.name}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{member.email}</p>
-                  </div>
-                  <StatusPill value={member.role === "salesperson" ? "review_ready" : member.role === "sales_manager" ? "approved" : "uploaded"} />
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Role</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{member.role.replaceAll("_", " ")}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Title</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{member.title || "Not set"}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned Lists</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{member.assignedLists.length}</p>
-                  </div>
-                  <div className="rounded-2xl bg-white px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned Leads</p>
-                    <p className="mt-2 text-sm font-medium text-slate-900">{member.assignedLeads.length}</p>
-                  </div>
-                </div>
-                {member.invites[0] ? (
-                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="font-semibold">Pending activation invite</p>
-                      <p className="text-xs uppercase tracking-[0.18em] text-amber-700">
-                        Expires {formatter.format(member.invites[0].expiresAt)}
-                      </p>
+            {users.map((member) => {
+              const pendingInvite = member.invites.find((invite) => invite.status === "pending");
+              const latestInvite = member.invites[0];
+              const canIssueReplacement = !member.passwordHash && !pendingInvite && latestInvite;
+
+              return (
+                <article
+                  key={member.id}
+                  data-user-email={member.email}
+                  className="rounded-[26px] border border-slate-200 bg-slate-50/80 p-5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-950">{member.name}</h2>
+                      <p className="mt-1 text-sm text-slate-600">{member.email}</p>
                     </div>
-                    <div className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-slate-700">
-                      {member.invites[0].deliveryState === "sent" ? (
-                        <p>
-                          Email sent {member.invites[0].deliveredAt ? formatter.format(member.invites[0].deliveredAt) : "recently"}.
-                        </p>
-                      ) : member.invites[0].deliveryState === "failed" ? (
-                        <p>
-                          Email delivery failed. Share the activation link manually for now.
-                          {member.invites[0].deliveryError ? ` ${member.invites[0].deliveryError}` : ""}
-                        </p>
-                      ) : (
-                        <p>
-                          Manual share required. Configure `RESEND_API_KEY` and `INVITE_FROM_EMAIL` to send invites automatically.
-                        </p>
-                      )}
+                    <StatusPill value={member.role === "salesperson" ? "review_ready" : member.role === "sales_manager" ? "approved" : "uploaded"} />
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Role</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{member.role.replaceAll("_", " ")}</p>
                     </div>
-                    <a
-                      href={`${appUrl}/activate/${member.invites[0].token}`}
-                      data-invite-email={member.email}
-                      className="mt-3 block break-all font-medium text-amber-900 underline decoration-amber-400 underline-offset-4"
-                    >
-                      {`${appUrl}/activate/${member.invites[0].token}`}
-                    </a>
-                    {canManageUsers(user.role) ? (
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <form action={resendUserInviteAction.bind(null, member.invites[0].id)}>
-                          <button
-                            type="submit"
-                            className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100"
-                          >
-                            Retry invite delivery
-                          </button>
-                        </form>
-                        <form action={revokeUserInviteAction.bind(null, member.invites[0].id)}>
-                          <button
-                            type="submit"
-                            className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 transition hover:border-rose-300 hover:bg-rose-100"
-                          >
-                            Revoke invite
-                          </button>
-                        </form>
+                    <div className="rounded-2xl bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Title</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{member.title || "Not set"}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned Lists</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{member.assignedLists.length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned Leads</p>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{member.assignedLeads.length}</p>
+                    </div>
+                  </div>
+                  {pendingInvite ? (
+                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-semibold">Pending activation invite</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-amber-700">
+                          Expires {formatter.format(pendingInvite.expiresAt)}
+                        </p>
                       </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </article>
-            ))}
+                      <div className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-slate-700">
+                        {pendingInvite.deliveryState === "sent" ? (
+                          <p>
+                            Email sent {pendingInvite.deliveredAt ? formatter.format(pendingInvite.deliveredAt) : "recently"}.
+                          </p>
+                        ) : pendingInvite.deliveryState === "failed" ? (
+                          <p>
+                            Email delivery failed. Share the activation link manually for now.
+                            {pendingInvite.deliveryError ? ` ${pendingInvite.deliveryError}` : ""}
+                          </p>
+                        ) : (
+                          <p>
+                            Manual share required. Configure `RESEND_API_KEY` and `INVITE_FROM_EMAIL` to send invites automatically.
+                          </p>
+                        )}
+                      </div>
+                      <a
+                        href={`${appUrl}/activate/${pendingInvite.token}`}
+                        data-invite-email={member.email}
+                        className="mt-3 block break-all font-medium text-amber-900 underline decoration-amber-400 underline-offset-4"
+                      >
+                        {`${appUrl}/activate/${pendingInvite.token}`}
+                      </a>
+                      {canManageUsers(user.role) ? (
+                        <div className="mt-4 flex flex-wrap gap-3">
+                          <form action={resendUserInviteAction.bind(null, pendingInvite.id)}>
+                            <button
+                              type="submit"
+                              className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100"
+                            >
+                              Retry invite delivery
+                            </button>
+                          </form>
+                          <form action={revokeUserInviteAction.bind(null, pendingInvite.id)}>
+                            <button
+                              type="submit"
+                              className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 transition hover:border-rose-300 hover:bg-rose-100"
+                            >
+                              Revoke invite
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : canIssueReplacement ? (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-4 text-sm text-slate-800">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-semibold">No active invite</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Last invite {latestInvite.status.replaceAll("_", " ")}
+                        </p>
+                      </div>
+                      <p className="mt-3 leading-7 text-slate-600">
+                        The latest activation link is no longer usable. Issue a replacement invite to rotate the link
+                        without recreating the user.
+                      </p>
+                      {canManageUsers(user.role) ? (
+                        <form action={createReplacementInviteAction.bind(null, member.id)} className="mt-4">
+                          <button
+                            type="submit"
+                            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+                          >
+                            Create replacement invite
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </article>
 

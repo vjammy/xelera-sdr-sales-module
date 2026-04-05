@@ -186,7 +186,9 @@ test("manager can onboard a new organization user through invite activation", as
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.getByText("The email and password combination was not recognized.")).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("heading", { name: "Open the operating console" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toHaveCount(0);
 
   await page.goto(activationUrl);
   await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();
@@ -230,4 +232,55 @@ test("manager can revoke a pending invite and the activation link stops working"
 
   await page.goto(activationUrl);
   await expect(page.getByRole("heading", { name: "This invite is no longer active" })).toBeVisible();
+});
+
+test("manager can create a replacement invite after revocation and the new link activates", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `replacement.rep.${suffix}@xelera.ai`;
+  const name = `Replacement Rep ${suffix}`;
+  const password = `RotatePass!${suffix}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(name);
+  await page.getByPlaceholder("Work email").fill(email);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0177");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+
+  const originalLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  const originalUrl = await originalLink.getAttribute("href");
+  if (!originalUrl) {
+    throw new Error("Expected an original activation URL.");
+  }
+
+  const userCard = originalLink.locator("xpath=ancestor::article[1]");
+  await userCard.getByRole("button", { name: "Revoke invite" }).click();
+  const rotatedCard = page.locator(`[data-user-email="${email}"]`).first();
+  await expect(rotatedCard).toContainText("No active invite");
+  await rotatedCard.getByRole("button", { name: "Create replacement invite" }).click();
+
+  const replacementLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  await expect(replacementLink).toBeVisible();
+  const replacementUrl = await replacementLink.getAttribute("href");
+  if (!replacementUrl || replacementUrl === originalUrl) {
+    throw new Error("Expected a fresh replacement activation URL.");
+  }
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await page.goto(replacementUrl);
+  await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();
+  await page.locator('input[name="password"]').fill(password);
+  await page.locator('input[name="confirmPassword"]').fill(password);
+  await page.getByRole("button", { name: "Activate and continue" }).click();
+  await expect(page.getByText("Your invite is active. Sign in with your new password.")).toBeVisible({
+    timeout: 10000,
+  });
+
+  await login(page, email, password);
+  await expect(page.getByText("Core Flow")).toBeVisible();
 });

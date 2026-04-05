@@ -112,6 +112,78 @@ async function attemptInviteDelivery(args: {
   });
 }
 
+async function createInviteForExistingUser(args: {
+  userId: string;
+  organizationId: string;
+  actorId: string;
+  actorName: string;
+  actorEmail: string;
+}) {
+  const targetUser = await prisma.user.findFirst({
+    where: {
+      id: args.userId,
+      organizationId: args.organizationId,
+    },
+    include: {
+      invites: {
+        where: {
+          status: "pending",
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!targetUser) {
+    throw new Error("That user could not be found.");
+  }
+
+  if (targetUser.passwordHash) {
+    throw new Error("That user has already activated their seat.");
+  }
+
+  if (targetUser.invites.length > 0) {
+    throw new Error("That user already has a pending invite.");
+  }
+
+  const inviteToken = crypto.randomBytes(24).toString("hex");
+  const inviteExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+
+  const invite = await prisma.userInvite.create({
+    data: {
+      organizationId: args.organizationId,
+      userId: targetUser.id,
+      invitedById: args.actorId,
+      token: inviteToken,
+      expiresAt: inviteExpiresAt,
+    },
+  });
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: args.organizationId,
+      actorId: args.actorId,
+      entityType: "user_invite",
+      entityId: targetUser.id,
+      action: "created",
+      metadata: {
+        email: targetUser.email,
+        role: targetUser.role,
+        expiresAt: inviteExpiresAt.toISOString(),
+        replacement: true,
+      },
+    },
+  });
+
+  await attemptInviteDelivery({
+    inviteId: invite.id,
+    organizationId: args.organizationId,
+    actorId: args.actorId,
+    actorName: args.actorName,
+    actorEmail: args.actorEmail,
+  });
+}
+
 export async function createLeadListAction(formData: FormData) {
   const user = await requireUser();
   const file = formData.get("file");
@@ -516,6 +588,24 @@ export async function revokeUserInviteAction(inviteId: string) {
       },
     }),
   ]);
+
+  revalidatePath("/admin/users");
+}
+
+export async function createReplacementInviteAction(userId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  await createInviteForExistingUser({
+    userId,
+    organizationId: user.organizationId,
+    actorId: user.id,
+    actorName: user.name || "",
+    actorEmail: user.email,
+  });
 
   revalidatePath("/admin/users");
 }

@@ -172,13 +172,10 @@ export async function getOrganizationUsers(organizationId: string) {
         select: { id: true },
       },
       invites: {
-        where: {
-          status: "pending",
-        },
         orderBy: {
           createdAt: "desc",
         },
-        take: 1,
+        take: 3,
       },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
