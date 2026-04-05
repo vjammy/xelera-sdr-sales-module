@@ -6,6 +6,14 @@ import { getProviderVerificationHistory } from "@/lib/data";
 import { formatDate } from "@/lib/format";
 import { canManageUsers } from "@/lib/permissions";
 
+const PROVIDER_FILTERS = [
+  { value: "all", label: "All providers" },
+  { value: "auth_email", label: "Auth sign-in email" },
+  { value: "outbound_email", label: "Outbound email delivery" },
+  { value: "ai_generation", label: "AI research and drafting" },
+  { value: "cron_protection", label: "Cron protection" },
+] as const;
+
 function getStatusBadgeClasses(action: string) {
   if (action === "verified") {
     return "bg-emerald-100 text-emerald-950";
@@ -14,14 +22,24 @@ function getStatusBadgeClasses(action: string) {
   return "bg-amber-100 text-amber-950";
 }
 
-export default async function SetupHistoryPage() {
+function normalizeProviderFilter(value: string | undefined) {
+  return PROVIDER_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
+}
+
+export default async function SetupHistoryPage(props: {
+  searchParams?: Promise<{ provider?: string }>;
+}) {
   const user = await requireUser();
 
   if (!canManageUsers(user.role)) {
     notFound();
   }
 
+  const searchParams = (await props.searchParams) ?? {};
+  const providerFilter = normalizeProviderFilter(searchParams.provider);
   const history = await getProviderVerificationHistory(user.organizationId);
+  const filteredHistory =
+    providerFilter === "all" ? history : history.filter((event) => event.providerKey === providerFilter);
 
   return (
     <WorkspaceShell user={user}>
@@ -53,10 +71,40 @@ export default async function SetupHistoryPage() {
           className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40"
           data-provider-verification-history
         >
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-          <div className="mt-5 space-y-3">
-            {history.length ? (
-              history.map((event) => (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
+              {providerFilter !== "all" ? (
+                <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
+                  Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"} for{" "}
+                  {PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label}.
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2" data-provider-history-filters>
+              {PROVIDER_FILTERS.map((filter) => {
+                const isActive = filter.value === providerFilter;
+
+                return (
+                  <Link
+                    key={filter.value}
+                    href={filter.value === "all" ? "/admin/setup/history" : `/admin/setup/history?provider=${filter.value}`}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {filter.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mt-5 space-y-3" data-provider-verification-events>
+            {filteredHistory.length ? (
+              filteredHistory.map((event) => (
                 <article key={event.id} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -78,7 +126,9 @@ export default async function SetupHistoryPage() {
               ))
             ) : (
               <p className="text-sm leading-7 text-slate-600">
-                No provider verification history has been recorded yet.
+                {providerFilter === "all"
+                  ? "No provider verification history has been recorded yet."
+                  : "No provider verification events match the current filter."}
               </p>
             )}
           </div>

@@ -202,7 +202,12 @@ export default async function SetupPage() {
             verificationHistory.slice(0, 4).map((event) => (
               <article key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-base font-semibold text-slate-950">{event.providerLabel}</p>
+                  <Link
+                    href={`/admin/setup/history?provider=${encodeURIComponent(event.providerKey)}`}
+                    className="text-base font-semibold text-slate-950 transition hover:text-slate-700"
+                  >
+                    {event.providerLabel}
+                  </Link>
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getReadinessBadgeClasses(
                       event.action === "verified" ? "success" : "warning",

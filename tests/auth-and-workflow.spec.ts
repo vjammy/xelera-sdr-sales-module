@@ -905,6 +905,14 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(verificationHistory).toContainText("Verified");
   await expect(verificationHistory).toContainText("Reopened");
   await expect(verificationHistory).toContainText("Ava Manager");
+  const historyFilters = page.locator("[data-provider-history-filters]");
+  await expect(historyFilters).toBeVisible();
+  await historyFilters.getByRole("link", { name: "Cron protection" }).click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection/);
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Cron protection");
+  const verificationEvents = page.locator("[data-provider-verification-events]");
+  await expect(verificationEvents).toContainText("Cron protection");
+  await expect(verificationEvents).not.toContainText("Auth sign-in email");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
