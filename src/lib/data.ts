@@ -210,6 +210,34 @@ export async function getInviteDigestHistory(recipientEmail: string, organizatio
     .filter((entry) => entry !== null);
 }
 
+export async function getRecipientDigestReviewState(recipientEmail: string, organizationId: string) {
+  const event = await prisma.auditEvent.findFirst({
+    where: {
+      organizationId,
+      entityType: "invite_digest_recipient_review",
+      entityId: recipientEmail,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!event) {
+    return null;
+  }
+
+  const metadata =
+    event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+      ? (event.metadata as Record<string, unknown>)
+      : null;
+
+  return {
+    id: event.id,
+    action: event.action,
+    createdAt: event.createdAt,
+    actorName: typeof metadata?.actorName === "string" ? metadata.actorName : null,
+    actorEmail: typeof metadata?.actorEmail === "string" ? metadata.actorEmail : null,
+  };
+}
+
 export async function getOrganizationInviteDigestHistory(organizationId: string) {
   const events = await prisma.auditEvent.findMany({
     where: {

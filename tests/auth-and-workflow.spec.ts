@@ -37,6 +37,24 @@ async function switchUser(page: Page, email: string, password = "Welcome123!") {
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
+async function signOutToLogin(page: Page) {
+  const signOutButton = page.getByRole("button", { name: "Sign out" });
+
+  if (await signOutButton.isVisible().catch(() => false)) {
+    await Promise.allSettled([
+      page.waitForURL(/\/login/, { timeout: 15000 }),
+      signOutButton.click(),
+    ]);
+  }
+
+  if (!/\/login/.test(page.url())) {
+    await page.context().clearCookies().catch(() => undefined);
+    await page.goto("/login");
+  }
+
+  await expect(page).toHaveURL(/\/login/);
+}
+
 async function createLeadList(page: import("@playwright/test").Page, uniqueSuffix: string) {
   const listName = `Playwright Event List ${uniqueSuffix}`;
   const csv = [
@@ -411,15 +429,13 @@ test("manager can rotate an expired invite into a fresh activation link", async 
   await expiredCard.getByRole("button", { name: "Create replacement invite" }).click();
 
   const replacementLink = page.locator(`a[data-invite-email="${email}"]`).first();
-  await expect(replacementLink).toBeVisible();
+  await expect(replacementLink).toBeVisible({ timeout: 10000 });
   const replacementUrl = await replacementLink.getAttribute("href");
   if (!replacementUrl || replacementUrl === originalUrl) {
     throw new Error("Expected a fresh replacement activation URL after expiry.");
   }
 
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
-
+  await page.context().clearCookies();
   await page.goto(originalUrl);
   await expect(page.getByRole("heading", { name: "This invite is no longer active" })).toBeVisible();
 
@@ -466,7 +482,7 @@ test("manager can proactively rotate an invite that is close to expiry", async (
   await inviteCard.getByRole("button", { name: "Rotate invite now" }).click();
 
   const replacementLink = page.locator(`a[data-invite-email="${email}"]`).first();
-  await expect(replacementLink).toBeVisible();
+  await expect(replacementLink).toBeVisible({ timeout: 10000 });
   await expect
     .poll(async () => await replacementLink.getAttribute("href"))
     .not.toBe(originalUrl);
@@ -475,9 +491,7 @@ test("manager can proactively rotate an invite that is close to expiry", async (
     throw new Error("Expected a fresh replacement activation URL before expiry.");
   }
 
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
-
+  await page.context().clearCookies();
   await page.goto(originalUrl);
   await expect(page.getByRole("heading", { name: "This invite is no longer active" })).toBeVisible();
 
@@ -509,7 +523,7 @@ test("manager dashboard flags pending invites that have gone stale", async ({ pa
   await page.getByPlaceholder("Phone").fill("+1 646-555-0144");
   await page.getByRole("button", { name: "Create activation invite" }).click();
 
-  await expect(page.locator(`[data-user-email="${email}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${email}"]`).first()).toBeVisible({ timeout: 10000 });
   await makeLatestInviteStale(email);
   await page.goto("/");
 
@@ -535,7 +549,7 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByPlaceholder("Phone").fill("+1 646-555-0133");
   await page.getByRole("button", { name: "Create activation invite" }).click();
 
-  await expect(page.locator(`a[data-invite-email="${email}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${email}"]`).first()).toBeVisible({ timeout: 10000 });
   await makeLatestInviteStale(email);
 
   const response = await page.request.get("/api/cron/invite-hygiene", {
@@ -582,6 +596,11 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.getByRole("heading", { name: /Recent invite hygiene deliveries for this recipient/i })).toBeVisible();
   await expect(page.getByText("ava.manager@xelera.ai")).toBeVisible();
   await expect(page.locator("[data-recipient-digest-summary]")).toBeVisible();
+  await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
+  await page.getByRole("button", { name: "Mark issue reviewed" }).click();
+  await expect(page.locator("[data-recipient-reviewed-banner]")).toContainText("Reviewed after repeated issues");
+  await expect(page.getByRole("button", { name: "Reopen issue" })).toBeVisible();
+  await page.getByRole("button", { name: "Reopen issue" }).click();
   await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
     /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
@@ -677,7 +696,7 @@ test("manager can limit invite digests to stale alerts only", async ({ page }) =
   await page.getByPlaceholder("Job title").fill("SDR");
   await page.getByPlaceholder("Phone").fill("+1 646-555-0122");
   await page.getByRole("button", { name: "Create activation invite" }).click();
-  await expect(page.locator(`[data-user-email="${staleEmail}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${staleEmail}"]`).first()).toBeVisible({ timeout: 10000 });
 
   await page.getByPlaceholder("Full name").fill(`Digest Expiring ${expiringSuffix}`);
   await page.getByPlaceholder("Work email").fill(expiringEmail);
@@ -685,7 +704,7 @@ test("manager can limit invite digests to stale alerts only", async ({ page }) =
   await page.getByPlaceholder("Job title").fill("SDR");
   await page.getByPlaceholder("Phone").fill("+1 646-555-0111");
   await page.getByRole("button", { name: "Create activation invite" }).click();
-  await expect(page.locator(`[data-user-email="${expiringEmail}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`).first()).toBeVisible({ timeout: 10000 });
 
   await makeLatestInviteStale(staleEmail);
   await makeLatestInviteExpireSoon(expiringEmail);

@@ -825,6 +825,34 @@ export async function runInviteDigestForRecipientAction(recipientEmail: string) 
   revalidatePath("/settings/profile");
 }
 
+export async function updateRecipientDigestReviewAction(
+  recipientEmail: string,
+  nextState: "acknowledged" | "reopened",
+) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to update digest review state.");
+  }
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: user.organizationId,
+      actorId: user.id,
+      entityType: "invite_digest_recipient_review",
+      entityId: recipientEmail,
+      action: nextState,
+      metadata: {
+        actorName: user.name,
+        actorEmail: user.email,
+      },
+    },
+  });
+
+  revalidatePath("/admin/digests/recipient");
+  revalidatePath("/admin/digests");
+}
+
 export async function completeInviteActivationAction(token: string, formData: FormData) {
   const parsed = activationSchema.safeParse({
     password: formData.get("password"),

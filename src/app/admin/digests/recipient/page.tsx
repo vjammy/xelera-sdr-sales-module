@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { runInviteDigestForRecipientAction } from "@/app/actions";
+import { runInviteDigestForRecipientAction, updateRecipientDigestReviewAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
-import { getInviteDigestHistory, getOrganizationUserByEmail } from "@/lib/data";
+import { getInviteDigestHistory, getOrganizationUserByEmail, getRecipientDigestReviewState } from "@/lib/data";
 import { canManageUsers } from "@/lib/permissions";
 
 function getDeliveryLabel(deliveryState: string) {
@@ -42,9 +42,10 @@ export default async function DigestRecipientPage(props: {
     notFound();
   }
 
-  const [recipient, digestHistory] = await Promise.all([
+  const [recipient, digestHistory, reviewState] = await Promise.all([
     getOrganizationUserByEmail(recipientEmail, user.organizationId),
     getInviteDigestHistory(recipientEmail, user.organizationId),
+    getRecipientDigestReviewState(recipientEmail, user.organizationId),
   ]);
 
   if (!recipient && digestHistory.length === 0) {
@@ -57,6 +58,7 @@ export default async function DigestRecipientPage(props: {
   });
   const recentAttentionRuns = digestHistory.filter((entry) => isAttentionState(entry.deliveryState)).length;
   const recentSuccessfulRuns = digestHistory.filter((entry) => entry.deliveryState === "sent").length;
+  const latestAttentionRun = digestHistory.find((entry) => isAttentionState(entry.deliveryState)) ?? null;
   let currentAttentionStreak = 0;
   for (const entry of digestHistory) {
     if (isAttentionState(entry.deliveryState)) {
@@ -67,6 +69,12 @@ export default async function DigestRecipientPage(props: {
     break;
   }
   const needsAttentionBanner = recentAttentionRuns >= 2 || currentAttentionStreak >= 2;
+  const reviewCoversLatestIssue =
+    reviewState?.action === "acknowledged" &&
+    latestAttentionRun &&
+    reviewState.createdAt >= latestAttentionRun.createdAt;
+  const showActiveAttentionBanner = Boolean(needsAttentionBanner && !reviewCoversLatestIssue);
+  const showReviewedBanner = Boolean(needsAttentionBanner && reviewCoversLatestIssue);
 
   return (
     <WorkspaceShell user={user}>
@@ -138,13 +146,39 @@ export default async function DigestRecipientPage(props: {
               <p className="mt-2 text-2xl font-semibold text-white">{currentAttentionStreak}</p>
             </div>
           </div>
-          {needsAttentionBanner ? (
+          {showActiveAttentionBanner ? (
             <div className="mt-6 rounded-[24px] border border-amber-300/40 bg-amber-400/10 p-4" data-recipient-attention-banner>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200">Needs repeated attention</p>
               <p className="mt-2 text-sm leading-7 text-amber-50">
                 This recipient has hit manual fallback or failed delivery in multiple recent digest runs. Consider rerunning the digest,
                 opening the onboarding seat, or checking whether their digest preference or inbox destination needs intervention.
               </p>
+              <form action={updateRecipientDigestReviewAction.bind(null, recipientEmail, "acknowledged")} className="mt-4">
+                <button
+                  type="submit"
+                  className="rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-100 hover:bg-white"
+                >
+                  Mark issue reviewed
+                </button>
+              </form>
+            </div>
+          ) : null}
+          {showReviewedBanner ? (
+            <div className="mt-6 rounded-[24px] border border-emerald-300/40 bg-emerald-400/10 p-4" data-recipient-reviewed-banner>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-100">Reviewed after repeated issues</p>
+              <p className="mt-2 text-sm leading-7 text-emerald-50">
+                {reviewState?.actorName ?? reviewState?.actorEmail ?? "A manager"} marked this issue reviewed{" "}
+                {reviewState ? formatter.format(reviewState.createdAt) : "recently"}. This recipient will become active again
+                automatically if a newer manual fallback or failed delivery arrives.
+              </p>
+              <form action={updateRecipientDigestReviewAction.bind(null, recipientEmail, "reopened")} className="mt-4">
+                <button
+                  type="submit"
+                  className="rounded-full border border-emerald-200/60 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-100 hover:bg-emerald-50"
+                >
+                  Reopen issue
+                </button>
+              </form>
             </div>
           ) : null}
         </article>
