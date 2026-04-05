@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UserRole } from "@prisma/client";
 import {
   createReplacementInviteAction,
@@ -20,10 +21,16 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: "admin_operator", label: "Admin Operator" },
 ];
 
-export default async function UsersPage() {
+export default async function UsersPage(props: {
+  searchParams?: Promise<{ email?: string }>;
+}) {
   const user = await requireUser();
   await expireStaleInvitesForOrganization(user.organizationId);
-  const users = await getOrganizationUsers(user.organizationId);
+  const searchParams = (await props.searchParams) ?? {};
+  const emailFilter = searchParams.email?.trim().toLowerCase() ?? "";
+  const users = (await getOrganizationUsers(user.organizationId)).filter((member) =>
+    emailFilter ? member.email.toLowerCase().includes(emailFilter) : true,
+  );
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -59,6 +66,35 @@ export default async function UsersPage() {
               <p className="mt-2 text-2xl font-semibold text-amber-950">{expiringSoonCount}</p>
             </div>
           </div>
+          <form className="mt-5 flex flex-col gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 md:flex-row md:items-end">
+            <label className="grid flex-1 gap-2 text-sm font-medium text-slate-700">
+              Filter by email
+              <input
+                type="search"
+                name="email"
+                defaultValue={emailFilter}
+                placeholder="Filter onboarding seats by email"
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Apply filter
+            </button>
+            <Link
+              href="/admin/users"
+              className="rounded-full border border-slate-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Clear
+            </Link>
+          </form>
+          {emailFilter ? (
+            <p className="mt-4 text-sm text-slate-600" data-user-filter-summary>
+              Showing {users.length} seat{users.length === 1 ? "" : "s"} matching &quot;{emailFilter}&quot;.
+            </p>
+          ) : null}
 
           <div className="mt-6 space-y-4">
             {users.map((member) => {
@@ -206,6 +242,13 @@ export default async function UsersPage() {
               );
             })}
           </div>
+          {!users.length ? (
+            <p className="mt-6 text-sm leading-7 text-slate-600">
+              {emailFilter
+                ? "No onboarding seats match the current email filter."
+                : "No onboarding seats have been created for this organization yet."}
+            </p>
+          ) : null}
         </article>
 
         <article className="rounded-[32px] bg-slate-950 p-8 text-white">

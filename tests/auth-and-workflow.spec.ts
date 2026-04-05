@@ -584,6 +584,16 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
     /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
   );
+  const digestCountBeforeRecipientRerun = await countInviteDigestEvents();
+  await page.getByRole("button", { name: "Rerun digest for this recipient" }).click();
+  await expect
+    .poll(async () => await countInviteDigestEvents())
+    .toBeGreaterThan(digestCountBeforeRecipientRerun);
+  await page.getByRole("link", { name: "Open onboarding seat" }).click();
+  await expect(page).toHaveURL(/\/admin\/users\?email=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-user-filter-summary]")).toContainText("ava.manager@xelera.ai");
+  await expect(page.locator('[data-user-email="ava.manager@xelera.ai"]')).toBeVisible();
+  await page.goto("/admin/digests/recipient?email=ava.manager%40xelera.ai");
   await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
   await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
 

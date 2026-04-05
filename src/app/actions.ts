@@ -807,6 +807,24 @@ export async function retryInviteDigestRecipientsAction(eventId: string) {
   revalidatePath("/settings/profile");
 }
 
+export async function runInviteDigestForRecipientAction(recipientEmail: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to run digest operations.");
+  }
+
+  await runInviteHygieneDigest({
+    organizationId: user.organizationId,
+    actorId: user.id,
+    recipientEmails: [recipientEmail],
+  });
+
+  revalidatePath("/admin/digests");
+  revalidatePath("/admin/digests/recipient");
+  revalidatePath("/settings/profile");
+}
+
 export async function completeInviteActivationAction(token: string, formData: FormData) {
   const parsed = activationSchema.safeParse({
     password: formData.get("password"),

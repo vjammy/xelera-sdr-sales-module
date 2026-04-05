@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { runInviteDigestForRecipientAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getInviteDigestHistory, getOrganizationUserByEmail } from "@/lib/data";
@@ -83,6 +84,20 @@ export default async function DigestRecipientPage(props: {
               className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm font-semibold text-white transition hover:border-slate-500 hover:bg-slate-900"
             >
               Back to filtered digest runs
+            </Link>
+            <form action={runInviteDigestForRecipientAction.bind(null, recipientEmail)}>
+              <button
+                type="submit"
+                className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Rerun digest for this recipient
+              </button>
+            </form>
+            <Link
+              href={`/admin/users?email=${encodeURIComponent(recipientEmail)}`}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Open onboarding seat
             </Link>
             {recipient?.id === user.id ? (
               <Link
