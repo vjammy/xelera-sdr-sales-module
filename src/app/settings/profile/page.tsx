@@ -2,10 +2,12 @@ import { saveProfileAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getProfile } from "@/lib/data";
+import { canManageUsers } from "@/lib/permissions";
 
 export default async function ProfilePage() {
   const user = await requireUser();
   const profile = await getProfile(user.id, user.organizationId);
+  const canManageInviteDigests = canManageUsers(user.role);
 
   return (
     <WorkspaceShell user={user}>
@@ -16,6 +18,14 @@ export default async function ProfilePage() {
           <p className="mt-4 text-base leading-7 text-slate-300">
             The system uses these preferences to reduce generic AI copy and make the first pass feel closer to the rep.
           </p>
+          {canManageInviteDigests ? (
+            <div className="mt-6 rounded-[24px] border border-slate-800 bg-slate-900/80 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Invite Digest</p>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                Because your role can manage onboarding, you can also choose how much invite hygiene email you want to receive.
+              </p>
+            </div>
+          ) : null}
         </div>
         <form
           action={saveProfileAction}
@@ -57,6 +67,20 @@ export default async function ProfilePage() {
               className="w-full rounded-[24px] border border-slate-200 px-4 py-3 text-sm"
             />
           </label>
+          {canManageInviteDigests ? (
+            <label className="mt-5 block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">Invite Digest Preference</span>
+              <select
+                name="inviteDigestPreference"
+                defaultValue={profile?.inviteDigestPreference ?? "all_alerts"}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+              >
+                <option value="all_alerts">Send both stale and expiring invite alerts</option>
+                <option value="stale_only">Send only stale invite alerts</option>
+                <option value="off">Do not send invite hygiene digests</option>
+              </select>
+            </label>
+          ) : null}
           <button
             type="submit"
             className="mt-6 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"

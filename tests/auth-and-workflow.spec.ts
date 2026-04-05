@@ -559,3 +559,72 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
     ),
   ).toBeTruthy();
 });
+
+test("manager can limit invite digests to stale alerts only", async ({ page }) => {
+  const staleSuffix = `${Date.now()}-stale`;
+  const expiringSuffix = `${Date.now()}-expiring`;
+  const staleEmail = `digest.stale.${staleSuffix}@xelera.ai`;
+  const expiringEmail = `digest.expiring.${expiringSuffix}@xelera.ai`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/settings/profile");
+  await page.locator('select[name="inviteDigestPreference"]').selectOption("stale_only");
+  await page.getByRole("button", { name: "Save profile settings" }).click();
+  await expect(page.locator('select[name="inviteDigestPreference"]')).toHaveValue("stale_only");
+
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(`Digest Stale ${staleSuffix}`);
+  await page.getByPlaceholder("Work email").fill(staleEmail);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0122");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+  await expect(page.locator(`a[data-invite-email="${staleEmail}"]`).first()).toBeVisible();
+
+  await page.getByPlaceholder("Full name").fill(`Digest Expiring ${expiringSuffix}`);
+  await page.getByPlaceholder("Work email").fill(expiringEmail);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0111");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+  await expect(page.locator(`a[data-invite-email="${expiringEmail}"]`).first()).toBeVisible();
+
+  await makeLatestInviteStale(staleEmail);
+  await makeLatestInviteExpireSoon(expiringEmail);
+
+  const response = await page.request.get("/api/cron/invite-hygiene", {
+    headers: {
+      authorization: "Bearer xelera-cron-secret-2026",
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as {
+    results: Array<{
+      recipientDeliveries: Array<{
+        email: string;
+        deliveryState: string;
+        alertCount: number;
+        staleCount: number;
+        expiringSoonCount: number;
+        preference: string;
+      }>;
+    }>;
+  };
+
+  const managerDelivery = payload.results
+    .flatMap((result) => result.recipientDeliveries)
+    .find((delivery) => delivery.email === "ava.manager@xelera.ai");
+
+  expect(managerDelivery).toBeDefined();
+  expect(managerDelivery?.preference).toBe("stale_only");
+  expect(managerDelivery?.staleCount).toBeGreaterThan(0);
+  expect(managerDelivery?.expiringSoonCount).toBe(0);
+  expect(managerDelivery?.alertCount).toBe(managerDelivery?.staleCount);
+
+  await page.goto("/settings/profile");
+  await page.locator('select[name="inviteDigestPreference"]').selectOption("all_alerts");
+  await page.getByRole("button", { name: "Save profile settings" }).click();
+  await expect(page.locator('select[name="inviteDigestPreference"]')).toHaveValue("all_alerts");
+});

@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { InviteDigestPreference, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { deliverInviteEmail } from "@/lib/email";
@@ -39,6 +39,8 @@ const userSchema = z.object({
   title: z.string().optional(),
   phone: z.string().optional(),
 });
+
+const digestPreferenceSchema = z.nativeEnum(InviteDigestPreference);
 
 const activationSchema = z
   .object({
@@ -494,6 +496,11 @@ export async function bulkApproveAction(formData: FormData) {
 
 export async function saveProfileAction(formData: FormData) {
   const user = await requireUser();
+  const rawDigestPreference = String(formData.get("inviteDigestPreference") ?? "");
+  const inviteDigestPreference =
+    user.role === "sales_manager" || user.role === "admin_operator"
+      ? digestPreferenceSchema.parse(rawDigestPreference || "all_alerts")
+      : "off";
 
   await prisma.user.update({
     where: { id: user.id },
@@ -502,6 +509,7 @@ export async function saveProfileAction(formData: FormData) {
       title: String(formData.get("title") ?? "") || null,
       emailPromptPreference: String(formData.get("emailPromptPreference") ?? "") || null,
       sampleEmail: String(formData.get("sampleEmail") ?? "") || null,
+      inviteDigestPreference,
     },
   });
 

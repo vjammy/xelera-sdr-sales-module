@@ -76,6 +76,12 @@ enum InviteDeliveryState {
   failed
 }
 
+enum InviteDigestPreference {
+  all_alerts
+  stale_only
+  off
+}
+
 model Organization {
   id               String              @id @default(cuid())
   name             String
@@ -123,6 +129,7 @@ model User {
   phone                 String?
   emailPromptPreference String?
   sampleEmail           String?
+  inviteDigestPreference InviteDigestPreference @default(all_alerts)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   organization          Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
