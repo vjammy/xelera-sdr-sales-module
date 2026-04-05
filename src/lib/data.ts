@@ -236,6 +236,34 @@ function getHighestSeverityDetails(recipientDeliveries: Array<Record<string, unk
   };
 }
 
+function getSortedAttentionRecipients(args: {
+  attentionRecipients: string[];
+  recipientDeliveries: Array<Record<string, unknown>>;
+  inviteDigestRecipientIssueState: Map<string, InviteDigestRecipientIssueState>;
+}) {
+  return [...args.attentionRecipients].sort((left, right) => {
+    const leftPriority = getAttentionRecipientPriority({
+      email: left,
+      recipientDeliveries: args.recipientDeliveries,
+      inviteDigestRecipientIssueState: args.inviteDigestRecipientIssueState,
+    });
+    const rightPriority = getAttentionRecipientPriority({
+      email: right,
+      recipientDeliveries: args.recipientDeliveries,
+      inviteDigestRecipientIssueState: args.inviteDigestRecipientIssueState,
+    });
+
+    return (
+      leftPriority.reviewPriority - rightPriority.reviewPriority ||
+      leftPriority.deliveryPriority - rightPriority.deliveryPriority ||
+      leftPriority.attentionRuns - rightPriority.attentionRuns ||
+      leftPriority.failedRuns - rightPriority.failedRuns ||
+      leftPriority.manualRuns - rightPriority.manualRuns ||
+      leftPriority.email.localeCompare(rightPriority.email)
+    );
+  });
+}
+
 export async function getDashboardData(user: {
   id: string;
   organizationId: string;
@@ -363,11 +391,21 @@ export async function getDashboardData(user: {
     const recipients = Array.isArray(metadata?.recipients)
       ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
       : [];
-      const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
       ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
-        : [];
-      const highestSeverity = getHighestSeverityDetails(recipientDeliveries);
-      const recipientCount = recipients.length;
+      : [];
+    const attentionRecipients = recipientDeliveries
+      .filter((delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed")
+      .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
+      .filter((email): email is string => Boolean(email));
+    const sortedAttentionRecipients = getSortedAttentionRecipients({
+      attentionRecipients,
+      recipientDeliveries,
+      inviteDigestRecipientIssueState,
+    });
+    const highestPriorityRecipient = sortedAttentionRecipients[0];
+    const highestSeverity = getHighestSeverityDetails(recipientDeliveries);
+    const recipientCount = recipients.length;
     const actionLabel =
       event.action === "sent"
         ? "Digest emailed"
@@ -407,18 +445,13 @@ export async function getDashboardData(user: {
         severityLabel: highestSeverity?.label,
         severityTone: highestSeverity?.tone,
         severityHref:
-          highestSeverity?.label === "Highest severity: Delivery failed"
-            ? "/admin/digests?state=failed"
-            : highestSeverity?.label === "Highest severity: Manual fallback"
-              ? "/admin/digests?state=manual"
+          highestSeverity?.label === "Highest severity: Delivery failed" && highestPriorityRecipient
+            ? `/admin/digests?state=failed&recipient=${encodeURIComponent(highestPriorityRecipient)}`
+            : highestSeverity?.label === "Highest severity: Manual fallback" && highestPriorityRecipient
+              ? `/admin/digests?state=manual&recipient=${encodeURIComponent(highestPriorityRecipient)}`
               : undefined,
         ...(event.action === "manual" || event.action === "failed"
         ? (() => {
-            const attentionRecipients = recipientDeliveries
-              .filter((delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed")
-              .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
-              .filter((email): email is string => Boolean(email));
-
             if (attentionRecipients.length === 1) {
               const matchingDelivery = recipientDeliveries.find(
                 (delivery) =>
@@ -459,27 +492,6 @@ export async function getDashboardData(user: {
             }
 
             if (attentionRecipients.length > 1) {
-              const sortedAttentionRecipients = [...attentionRecipients].sort((left, right) => {
-                const leftPriority = getAttentionRecipientPriority({
-                  email: left,
-                  recipientDeliveries,
-                  inviteDigestRecipientIssueState,
-                });
-                const rightPriority = getAttentionRecipientPriority({
-                  email: right,
-                  recipientDeliveries,
-                  inviteDigestRecipientIssueState,
-                });
-
-                return (
-                  leftPriority.reviewPriority - rightPriority.reviewPriority ||
-                  leftPriority.deliveryPriority - rightPriority.deliveryPriority ||
-                  leftPriority.attentionRuns - rightPriority.attentionRuns ||
-                  leftPriority.failedRuns - rightPriority.failedRuns ||
-                  leftPriority.manualRuns - rightPriority.manualRuns ||
-                  leftPriority.email.localeCompare(rightPriority.email)
-                );
-              });
               const reviewedRecipients = sortedAttentionRecipients.filter(
                 (email) => inviteDigestRecipientIssueState.get(email)?.reviewState === "reviewed",
               );

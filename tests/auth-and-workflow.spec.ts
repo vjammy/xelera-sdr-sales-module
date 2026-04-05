@@ -884,8 +884,10 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   );
   await expect(priorityActivityCard).toContainText("Highest severity: Delivery failed");
   await priorityActivityCard.getByRole("link", { name: "Highest severity: Delivery failed" }).click();
-  await expect(page).toHaveURL(/\/admin\/digests\?state=failed/);
+  await expect(page).toHaveURL(new RegExp(`/admin/digests\\?state=failed&recipient=${encodeURIComponent(failedPriorityEmail)}`));
   await expect(page.locator("[data-digest-filter-summary]")).toContainText("failed");
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText(failedPriorityEmail);
+  await expect(page.locator("[data-digest-ops-history]")).toContainText(failedPriorityEmail);
   await page.goto("/");
   await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${failedPriorityEmail}`) })).toBeVisible();
   await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${manualPriorityEmail}`) })).toBeVisible();
