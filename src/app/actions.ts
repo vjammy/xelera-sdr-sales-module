@@ -1,5 +1,6 @@
 "use server";
 
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -35,8 +36,19 @@ const userSchema = z.object({
   role: z.nativeEnum(UserRole),
   title: z.string().optional(),
   phone: z.string().optional(),
-  password: z.string().min(8),
 });
+
+const activationSchema = z
+  .object({
+    password: z.string().min(8),
+    confirmPassword: z.string().min(8),
+    title: z.string().optional(),
+    phone: z.string().optional(),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
 
 export async function createLeadListAction(formData: FormData) {
   const user = await requireUser();
@@ -305,7 +317,7 @@ export async function saveProductAction(formData: FormData) {
   revalidatePath("/admin/products");
 }
 
-export async function saveUserAction(formData: FormData) {
+export async function createUserInviteAction(formData: FormData) {
   const user = await requireUser();
 
   if (!canManageUsers(user.role)) {
@@ -318,7 +330,6 @@ export async function saveUserAction(formData: FormData) {
     role: formData.get("role"),
     title: formData.get("title"),
     phone: formData.get("phone"),
-    password: formData.get("password"),
   });
 
   const existing = await prisma.user.findUnique({
@@ -329,19 +340,116 @@ export async function saveUserAction(formData: FormData) {
     throw new Error("A user with that email already exists.");
   }
 
-  const passwordHash = await bcrypt.hash(parsed.password, 10);
+  const inviteToken = crypto.randomBytes(24).toString("hex");
+  const inviteExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
 
-  await prisma.user.create({
-    data: {
-      organizationId: user.organizationId,
-      name: parsed.name,
-      email: parsed.email,
-      role: parsed.role,
-      title: parsed.title || null,
-      phone: parsed.phone || null,
-      passwordHash,
-    },
+  await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        organizationId: user.organizationId,
+        name: parsed.name,
+        email: parsed.email,
+        role: parsed.role,
+        title: parsed.title || null,
+        phone: parsed.phone || null,
+        passwordHash: null,
+      },
+    });
+
+    await tx.userInvite.create({
+      data: {
+        organizationId: user.organizationId,
+        userId: createdUser.id,
+        invitedById: user.id,
+        token: inviteToken,
+        expiresAt: inviteExpiresAt,
+      },
+    });
+
+    await tx.auditEvent.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.id,
+        entityType: "user_invite",
+        entityId: createdUser.id,
+        action: "created",
+        metadata: {
+          email: createdUser.email,
+          role: createdUser.role,
+          expiresAt: inviteExpiresAt.toISOString(),
+        },
+      },
+    });
   });
 
   revalidatePath("/admin/users");
+}
+
+export async function completeInviteActivationAction(token: string, formData: FormData) {
+  const parsed = activationSchema.safeParse({
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+    title: formData.get("title"),
+    phone: formData.get("phone"),
+  });
+
+  if (!parsed.success) {
+    redirect(`/activate/${token}?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? "Activation failed.")}`);
+  }
+
+  const invite = await prisma.userInvite.findUnique({
+    where: { token },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!invite || invite.status !== "pending") {
+    redirect(`/activate/${token}?error=${encodeURIComponent("This activation link is no longer valid.")}`);
+  }
+
+  if (invite.expiresAt <= new Date()) {
+    await prisma.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: "expired",
+      },
+    });
+
+    redirect(`/activate/${token}?error=${encodeURIComponent("This activation link has expired.")}`);
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: invite.userId },
+      data: {
+        passwordHash,
+        title: parsed.data.title || invite.user.title || null,
+        phone: parsed.data.phone || invite.user.phone || null,
+      },
+    }),
+    prisma.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: "accepted",
+        acceptedAt: new Date(),
+      },
+    }),
+    prisma.auditEvent.create({
+      data: {
+        organizationId: invite.organizationId,
+        actorId: invite.userId,
+        entityType: "user_invite",
+        entityId: invite.id,
+        action: "accepted",
+        metadata: {
+          email: invite.user.email,
+        },
+      },
+    }),
+  ]);
+
+  redirect(`/login?activated=1&email=${encodeURIComponent(invite.user.email)}`);
 }

@@ -1,18 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-async function login(page: import("@playwright/test").Page, email: string) {
+async function login(page: Page, email: string, password = "Welcome123!") {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("Welcome123!");
+  await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
-async function switchUser(page: import("@playwright/test").Page, email: string) {
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
+async function switchUser(page: Page, email: string, password = "Welcome123!") {
+  const signOutButton = page.getByRole("button", { name: "Sign out" });
+  if (await signOutButton.isVisible().catch(() => false)) {
+    await signOutButton.click();
+    await expect(page).toHaveURL(/\/login/);
+  } else {
+    await page.goto("/login");
+  }
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("Welcome123!");
+  await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Enter workspace" }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
@@ -146,10 +151,11 @@ test("salesperson can manually edit, regenerate, pause, reject, and approve with
   await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 10000 });
 });
 
-test("manager can onboard a new organization user who can then log in", async ({ page }) => {
+test("manager can onboard a new organization user through invite activation", async ({ page }) => {
   const suffix = Date.now();
   const email = `new.rep.${suffix}@xelera.ai`;
   const name = `Playwright Rep ${suffix}`;
+  const password = `InvitePass!${suffix}`;
 
   await login(page, "ava.manager@xelera.ai");
   await page.goto("/admin/users");
@@ -157,15 +163,37 @@ test("manager can onboard a new organization user who can then log in", async ({
   await page.getByPlaceholder("Full name").fill(name);
   await page.getByPlaceholder("Work email").fill(email);
   await page.locator('select[name="role"]').selectOption("salesperson");
-  await page.locator('input[name="password"]').fill("Welcome123!");
   await page.getByPlaceholder("Job title").fill("SDR");
   await page.getByPlaceholder("Phone").fill("+1 646-555-0199");
-  await page.getByRole("button", { name: "Create user" }).click();
+  await page.getByRole("button", { name: "Create activation invite" }).click();
 
   await expect(page.getByText(email)).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(name)).toBeVisible();
+  const activationLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  await expect(activationLink).toBeVisible();
 
-  await switchUser(page, email);
+  const activationUrl = await activationLink.getAttribute("href");
+  if (!activationUrl) {
+    throw new Error("Expected an activation URL for the newly invited user.");
+  }
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Enter workspace" }).click();
+  await expect(page.getByText("The email and password combination was not recognized.")).toBeVisible();
+
+  await page.goto(activationUrl);
+  await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();
+  await page.locator('input[name="password"]').fill(password);
+  await page.locator('input[name="confirmPassword"]').fill(password);
+  await page.getByRole("button", { name: "Activate and continue" }).click();
+  await expect(page.getByText("Your invite is active. Sign in with your new password.")).toBeVisible({
+    timeout: 10000,
+  });
+
+  await login(page, email, password);
   await expect(page.getByText("Core Flow")).toBeVisible();
   await page.getByRole("link", { name: "Lead Lists" }).click();
   await expect(page.getByRole("button", { name: "Bulk approve selected" })).toHaveCount(0);

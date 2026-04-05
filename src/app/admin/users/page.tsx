@@ -1,5 +1,5 @@
 import { UserRole } from "@prisma/client";
-import { saveUserAction } from "@/app/actions";
+import { createUserInviteAction } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
@@ -15,6 +15,13 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 export default async function UsersPage() {
   const user = await requireUser();
   const users = await getOrganizationUsers(user.organizationId);
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
   return (
     <WorkspaceShell user={user}>
@@ -57,16 +64,33 @@ export default async function UsersPage() {
                     <p className="mt-2 text-sm font-medium text-slate-900">{member.assignedLeads.length}</p>
                   </div>
                 </div>
+                {member.invites[0] ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-semibold">Pending activation invite</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-amber-700">
+                        Expires {formatter.format(member.invites[0].expiresAt)}
+                      </p>
+                    </div>
+                    <a
+                      href={`${appUrl}/activate/${member.invites[0].token}`}
+                      data-invite-email={member.email}
+                      className="mt-3 block break-all font-medium text-amber-900 underline decoration-amber-400 underline-offset-4"
+                    >
+                      {`${appUrl}/activate/${member.invites[0].token}`}
+                    </a>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
         </article>
 
         <article className="rounded-[32px] bg-slate-950 p-8 text-white">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-300">Create Seat</p>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight">Add a new user to this organization</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-300">Invite Seat</p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight">Create a user and hand off activation</h2>
           {canManageUsers(user.role) ? (
-            <form action={saveUserAction} className="mt-6 space-y-4">
+            <form action={createUserInviteAction} className="mt-6 space-y-4">
               <input
                 name="name"
                 placeholder="Full name"
@@ -90,12 +114,9 @@ export default async function UsersPage() {
                     </option>
                   ))}
                 </select>
-                <input
-                  name="password"
-                  type="text"
-                  defaultValue="Welcome123!"
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm"
-                />
+                <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
+                  The new user will set their own password during activation.
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <input
@@ -113,7 +134,7 @@ export default async function UsersPage() {
                 type="submit"
                 className="rounded-full bg-teal-400 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-teal-300"
               >
-                Create user
+                Create activation invite
               </button>
             </form>
           ) : (

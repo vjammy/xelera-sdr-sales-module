@@ -22,6 +22,13 @@ export default async function LoginPage() {
             Upload conference leads, research the account, draft the sequence, and keep explicit review in the
             loop before anything gets approved.
           </p>
+          <div className="mt-8 rounded-[26px] border border-teal-900/60 bg-teal-950/30 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-300">Invite-based onboarding</p>
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              New users now activate their seat from an invite link, create their own password, and then sign in
+              here. The demo users below still exist for seeded local verification.
+            </p>
+          </div>
           <div className="mt-10 grid gap-4">
             {LOGIN_HINTS.map((hint) => (
               <div key={hint.email} className="rounded-[26px] border border-slate-800 bg-slate-900/80 p-5">

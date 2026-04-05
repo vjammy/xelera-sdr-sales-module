@@ -171,7 +171,51 @@ export async function getOrganizationUsers(organizationId: string) {
       assignedLeads: {
         select: { id: true },
       },
+      invites: {
+        where: {
+          status: "pending",
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 1,
+      },
     },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
+}
+
+export async function getInviteByToken(token: string) {
+  const invite = await prisma.userInvite.findUnique({
+    where: { token },
+    include: {
+      user: true,
+      invitedBy: true,
+      organization: true,
+    },
+  });
+
+  if (!invite) {
+    return null;
+  }
+
+  if (invite.status !== "pending") {
+    return invite;
+  }
+
+  if (invite.expiresAt <= new Date()) {
+    return prisma.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: "expired",
+      },
+      include: {
+        user: true,
+        invitedBy: true,
+        organization: true,
+      },
+    });
+  }
+
+  return invite;
 }

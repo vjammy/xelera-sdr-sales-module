@@ -63,6 +63,13 @@ enum ReviewActionType {
   bulk_approve
 }
 
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
 model Organization {
   id               String              @id @default(cuid())
   name             String
@@ -83,6 +90,7 @@ model Organization {
   reviewActions    ReviewAction[]
   bulkApprovalBatches BulkApprovalBatch[]
   auditEvents      AuditEvent[]
+  userInvites      UserInvite[]
 }
 
 model Team {
@@ -103,7 +111,7 @@ model User {
   teamId                String?
   name                  String
   email                 String               @unique
-  passwordHash          String
+  passwordHash          String?
   role                  UserRole
   title                 String?
   phone                 String?
@@ -121,6 +129,27 @@ model User {
   prompts               GenerationPrompt[]
   bulkApprovalBatches   BulkApprovalBatch[]
   auditEvents           AuditEvent[]
+  invites               UserInvite[]         @relation("InvitedUser")
+  sentInvites           UserInvite[]         @relation("InvitedBy")
+}
+
+model UserInvite {
+  id             String        @id @default(cuid())
+  organizationId String
+  userId         String
+  invitedById    String?
+  token          String        @unique
+  status         InviteStatus  @default(pending)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User          @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy      User?         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([userId, status])
 }
 
 model Product {
