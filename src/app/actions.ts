@@ -478,6 +478,48 @@ export async function resendUserInviteAction(inviteId: string) {
   revalidatePath("/admin/users");
 }
 
+export async function revokeUserInviteAction(inviteId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  const invite = await prisma.userInvite.findUnique({
+    where: { id: inviteId },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!invite || invite.organizationId !== user.organizationId || invite.status !== "pending") {
+    throw new Error("This invite is no longer eligible for revocation.");
+  }
+
+  await prisma.$transaction([
+    prisma.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: "revoked",
+      },
+    }),
+    prisma.auditEvent.create({
+      data: {
+        organizationId: user.organizationId,
+        actorId: user.id,
+        entityType: "user_invite",
+        entityId: invite.id,
+        action: "revoked",
+        metadata: {
+          email: invite.user.email,
+        },
+      },
+    }),
+  ]);
+
+  revalidatePath("/admin/users");
+}
+
 export async function completeInviteActivationAction(token: string, formData: FormData) {
   const parsed = activationSchema.safeParse({
     password: formData.get("password"),

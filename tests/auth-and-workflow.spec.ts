@@ -202,3 +202,32 @@ test("manager can onboard a new organization user through invite activation", as
   await page.getByRole("link", { name: "Lead Lists" }).click();
   await expect(page.getByRole("button", { name: "Bulk approve selected" })).toHaveCount(0);
 });
+
+test("manager can revoke a pending invite and the activation link stops working", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `revoked.rep.${suffix}@xelera.ai`;
+  const name = `Revoked Rep ${suffix}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(name);
+  await page.getByPlaceholder("Work email").fill(email);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0188");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+
+  const activationLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  const activationUrl = await activationLink.getAttribute("href");
+  if (!activationUrl) {
+    throw new Error("Expected an activation URL for the pending invite.");
+  }
+
+  const userCard = activationLink.locator("xpath=ancestor::article[1]");
+  await userCard.getByRole("button", { name: "Revoke invite" }).click();
+  await expect(page.locator(`a[data-invite-email="${email}"]`)).toHaveCount(0);
+
+  await page.goto(activationUrl);
+  await expect(page.getByRole("heading", { name: "This invite is no longer active" })).toBeVisible();
+});

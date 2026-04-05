@@ -1,5 +1,5 @@
 import { UserRole } from "@prisma/client";
-import { createUserInviteAction, resendUserInviteAction } from "@/app/actions";
+import { createUserInviteAction, resendUserInviteAction, revokeUserInviteAction } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
@@ -98,14 +98,24 @@ export default async function UsersPage() {
                       {`${appUrl}/activate/${member.invites[0].token}`}
                     </a>
                     {canManageUsers(user.role) ? (
-                      <form action={resendUserInviteAction.bind(null, member.invites[0].id)} className="mt-4">
-                        <button
-                          type="submit"
-                          className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100"
-                        >
-                          Retry invite delivery
-                        </button>
-                      </form>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <form action={resendUserInviteAction.bind(null, member.invites[0].id)}>
+                          <button
+                            type="submit"
+                            className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:border-amber-400 hover:bg-amber-100"
+                          >
+                            Retry invite delivery
+                          </button>
+                        </form>
+                        <form action={revokeUserInviteAction.bind(null, member.invites[0].id)}>
+                          <button
+                            type="submit"
+                            className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-900 transition hover:border-rose-300 hover:bg-rose-100"
+                          >
+                            Revoke invite
+                          </button>
+                        </form>
+                      </div>
                     ) : null}
                   </div>
                 ) : null}
