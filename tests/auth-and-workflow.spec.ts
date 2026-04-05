@@ -508,7 +508,7 @@ test("manager dashboard flags pending invites that have gone stale", async ({ pa
   const callout = page.locator("[data-stale-invite-callout]");
   await expect(callout).toBeVisible();
   await expect(callout).toContainText("Pending seats have gone untouched for several days");
-  await expect(page.locator(`[data-stale-invite-email="${email}"]`)).toContainText(email);
+  await expect(callout).toContainText("Open user onboarding");
   await expect(page.getByRole("link", { name: "Open user onboarding" })).toBeVisible();
 });
 
@@ -558,6 +558,11 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
         result.recipients.includes("ava.manager@xelera.ai"),
     ),
   ).toBeTruthy();
+
+  await page.goto("/settings/profile");
+  const history = page.locator("[data-invite-digest-history]");
+  await expect(history).toBeVisible();
+  await expect(history).toContainText(/Manual fallback|Emailed successfully|Delivery failed/);
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

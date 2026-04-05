@@ -1,13 +1,20 @@
 import { saveProfileAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
-import { getProfile } from "@/lib/data";
+import { getInviteDigestHistory, getProfile } from "@/lib/data";
 import { canManageUsers } from "@/lib/permissions";
 
 export default async function ProfilePage() {
   const user = await requireUser();
   const profile = await getProfile(user.id, user.organizationId);
   const canManageInviteDigests = canManageUsers(user.role);
+  const digestHistory = canManageInviteDigests
+    ? await getInviteDigestHistory(user.email, user.organizationId)
+    : [];
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
   return (
     <WorkspaceShell user={user}>
@@ -87,6 +94,55 @@ export default async function ProfilePage() {
           >
             Save profile settings
           </button>
+          {canManageInviteDigests ? (
+            <div className="mt-8 rounded-[28px] border border-slate-200 bg-slate-50/80 p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Digest History</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                    Recent invite hygiene deliveries for your seat
+                  </h2>
+                </div>
+              </div>
+              {digestHistory.length ? (
+                <div className="mt-5 space-y-3" data-invite-digest-history>
+                  {digestHistory.map((entry) => (
+                    <article
+                      key={entry.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold text-slate-950">
+                            {entry.deliveryState === "sent"
+                              ? "Emailed successfully"
+                              : entry.deliveryState === "manual"
+                                ? "Manual fallback"
+                                : entry.deliveryState === "failed"
+                                  ? "Delivery failed"
+                                  : "Skipped"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">{formatter.format(entry.createdAt)}</p>
+                        </div>
+                        <div className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
+                          {entry.preference.replaceAll("_", " ")}
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm leading-7 text-slate-700">
+                        {entry.alertCount} alerts included.
+                        {" "}
+                        {entry.staleCount} stale and {entry.expiringSoonCount} expiring soon.
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm leading-7 text-slate-600">
+                  No invite hygiene digest runs have been recorded for your seat yet.
+                </p>
+              )}
+            </div>
+          ) : null}
         </form>
       </section>
     </WorkspaceShell>

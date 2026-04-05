@@ -157,6 +157,47 @@ export async function getProfile(userId: string, organizationId: string) {
   });
 }
 
+export async function getInviteDigestHistory(recipientEmail: string, organizationId: string) {
+  const events = await prisma.auditEvent.findMany({
+    where: {
+      organizationId,
+      entityType: "invite_hygiene_digest",
+    },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+  });
+
+  return events
+    .map((event) => {
+      const metadata =
+        event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+          ? (event.metadata as Record<string, unknown>)
+          : null;
+      const deliveries = Array.isArray(metadata?.recipientDeliveries)
+        ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
+        : [];
+      const delivery = deliveries.find((entry) => entry.email === recipientEmail);
+
+      if (!delivery) {
+        return null;
+      }
+
+      return {
+        id: event.id,
+        createdAt: event.createdAt,
+        action: event.action,
+        deliveryState:
+          typeof delivery.deliveryState === "string" ? delivery.deliveryState : "skipped",
+        alertCount: typeof delivery.alertCount === "number" ? delivery.alertCount : 0,
+        staleCount: typeof delivery.staleCount === "number" ? delivery.staleCount : 0,
+        expiringSoonCount:
+          typeof delivery.expiringSoonCount === "number" ? delivery.expiringSoonCount : 0,
+        preference: typeof delivery.preference === "string" ? delivery.preference : "all_alerts",
+      };
+    })
+    .filter((entry) => entry !== null);
+}
+
 export async function getAssignableSalespeople(organizationId: string) {
   return prisma.user.findMany({
     where: {
