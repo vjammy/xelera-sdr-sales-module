@@ -9,6 +9,7 @@ import {
   buildDigestExportHref,
   buildDigestHref,
   filterDigestHistory,
+  normalizeIssueFilterState,
   normalizeFilterState,
   normalizePageNumber,
   type DigestFilterState,
@@ -72,7 +73,7 @@ function getRecipientIssueBadge(delivery: {
 }
 
 export default async function DigestOpsPage(props: {
-  searchParams?: Promise<{ state?: string; recipient?: string; page?: string }>;
+  searchParams?: Promise<{ state?: string; recipient?: string; page?: string; issue?: string }>;
 }) {
   const user = await requireUser();
 
@@ -83,9 +84,10 @@ export default async function DigestOpsPage(props: {
   const searchParams = (await props.searchParams) ?? {};
   const filterState = normalizeFilterState(searchParams.state);
   const recipientQuery = searchParams.recipient?.trim() ?? "";
+  const issueFilterState = normalizeIssueFilterState(searchParams.issue);
   const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getOrganizationInviteDigestHistory(user.organizationId);
-  const filteredHistory = filterDigestHistory(history, filterState, recipientQuery);
+  const filteredHistory = filterDigestHistory(history, filterState, recipientQuery, issueFilterState);
   const { currentPage, totalPages, paginatedHistory } = paginateDigestHistory(filteredHistory, requestedPage);
   const formatter = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
@@ -98,13 +100,31 @@ export default async function DigestOpsPage(props: {
     page: currentPage,
     state: filterState,
     recipientQuery,
+    issueState: issueFilterState,
   });
   const exportHref = buildDigestExportHref({
     page: currentPage,
     state: filterState,
     recipientQuery,
+    issueState: issueFilterState,
   });
   const shareUrl = new URL(currentViewPath, appUrl).toString();
+  const recipientIssueSummary = filteredHistory.reduce(
+    (summary, entry) => {
+      for (const delivery of entry.recipientDeliveries) {
+        if (delivery.issueState === "active_issue") {
+          summary.activeIssueCount += 1;
+        }
+
+        if (delivery.issueState === "reviewed") {
+          summary.reviewedIssueCount += 1;
+        }
+      }
+
+      return summary;
+    },
+    { activeIssueCount: 0, reviewedIssueCount: 0 },
+  );
   const presets = [
     {
       label: "All runs",
@@ -220,6 +240,7 @@ export default async function DigestOpsPage(props: {
                     page: 1,
                     state: preset.state,
                     recipientQuery: preset.recipientQuery,
+                    issueState: issueFilterState,
                   })}
                   aria-current={active ? "page" : undefined}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -240,6 +261,42 @@ export default async function DigestOpsPage(props: {
               url={shareUrl}
             />
           </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2" data-digest-issue-summary>
+            <Link
+              href={buildDigestHref({
+                page: 1,
+                state: filterState,
+                recipientQuery,
+                issueState: "active_issue",
+              })}
+              className={`rounded-[24px] border px-4 py-4 transition ${
+                issueFilterState === "active_issue"
+                  ? "border-amber-300 bg-amber-50"
+                  : "border-slate-200 bg-slate-50/80 hover:border-amber-200 hover:bg-amber-50/60"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">Unresolved Recipient Issues</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-950">{recipientIssueSummary.activeIssueCount}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Open repeated delivery issues in the current view.</p>
+            </Link>
+            <Link
+              href={buildDigestHref({
+                page: 1,
+                state: filterState,
+                recipientQuery,
+                issueState: "reviewed",
+              })}
+              className={`rounded-[24px] border px-4 py-4 transition ${
+                issueFilterState === "reviewed"
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "border-slate-200 bg-slate-50/80 hover:border-emerald-200 hover:bg-emerald-50/60"
+              }`}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">Reviewed Recipient Issues</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-950">{recipientIssueSummary.reviewedIssueCount}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Issues acknowledged by a manager in the current view.</p>
+            </Link>
+          </div>
           <div className="mt-3 flex justify-end">
             <Link
               href={exportHref}
@@ -253,6 +310,11 @@ export default async function DigestOpsPage(props: {
             <p className="mt-4 text-sm text-slate-600" data-digest-filter-summary>
               Showing {filteredHistory.length} run{filteredHistory.length === 1 ? "" : "s"}
               {filterState !== "all" ? ` for ${filterState === "retry" ? "targeted retries" : filterState}` : ""}
+              {issueFilterState !== "all"
+                ? `${filterState !== "all" || recipientQuery ? " with" : " for"} ${
+                    issueFilterState === "active_issue" ? "unresolved issues" : "reviewed issues"
+                  }`
+                : ""}
               {recipientQuery ? `${filterState !== "all" ? " matching" : " matching"} "${recipientQuery}"` : ""}.
             </p>
           ) : null}
@@ -404,6 +466,7 @@ export default async function DigestOpsPage(props: {
                   page: Math.max(1, currentPage - 1),
                   state: filterState,
                   recipientQuery,
+                  issueState: issueFilterState,
                 })}
                 aria-disabled={currentPage === 1}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -422,6 +485,7 @@ export default async function DigestOpsPage(props: {
                       page: pageNumber,
                       state: filterState,
                       recipientQuery,
+                      issueState: issueFilterState,
                     })}
                     aria-current={pageNumber === currentPage ? "page" : undefined}
                     className={`rounded-full px-3 py-1.5 font-semibold transition ${
@@ -439,6 +503,7 @@ export default async function DigestOpsPage(props: {
                   page: Math.min(totalPages, currentPage + 1),
                   state: filterState,
                   recipientQuery,
+                  issueState: issueFilterState,
                 })}
                 aria-disabled={currentPage === totalPages}
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${

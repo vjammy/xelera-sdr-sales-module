@@ -585,6 +585,10 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
   await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-digest-ops-history]")).toContainText("Reviewed issue");
+  await expect(page.locator("[data-digest-issue-summary]")).toContainText("Reviewed Recipient Issues");
+  await page.getByRole("link", { name: /Reviewed Recipient Issues/i }).click();
+  await expect(page).toHaveURL(/issue=reviewed/);
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText("reviewed issues");
   await page.goto("/admin/digests/recipient?email=ava.manager%40xelera.ai");
   await page.getByRole("button", { name: "Reopen issue" }).click();
   await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
@@ -604,6 +608,9 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
   await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-digest-ops-history]")).toContainText("Unresolved repeated issue");
+  await page.getByRole("link", { name: /Unresolved Recipient Issues/i }).click();
+  await expect(page).toHaveURL(/issue=active_issue/);
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText("unresolved issues");
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
   await page.getByRole("button", { name: "Run digest now" }).click();

@@ -1,6 +1,7 @@
 import type { getOrganizationInviteDigestHistory } from "@/lib/data";
 
 export type DigestFilterState = "all" | "sent" | "manual" | "failed" | "skipped" | "retry";
+export type DigestIssueFilterState = "all" | "active_issue" | "reviewed";
 export const DIGESTS_PER_PAGE = 6;
 
 export type OrganizationDigestHistory = Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>;
@@ -24,6 +25,14 @@ export function normalizePageNumber(value?: string) {
   return parsed;
 }
 
+export function normalizeIssueFilterState(value?: string): DigestIssueFilterState {
+  if (value === "active_issue" || value === "reviewed") {
+    return value;
+  }
+
+  return "all";
+}
+
 export function matchesRecipientFilter(query: string, entry: OrganizationDigestHistoryEntry) {
   if (!query) {
     return true;
@@ -42,6 +51,7 @@ export function filterDigestHistory(
   history: OrganizationDigestHistory,
   state: DigestFilterState,
   recipientQuery: string,
+  issueState: DigestIssueFilterState = "all",
 ) {
   return history.filter((entry) => {
     const matchesState =
@@ -50,8 +60,12 @@ export function filterDigestHistory(
         : state === "retry"
           ? entry.isTargetedRetry
           : entry.action === state;
+    const matchesIssueState =
+      issueState === "all"
+        ? true
+        : entry.recipientDeliveries.some((delivery) => delivery.issueState === issueState);
 
-    return matchesState && matchesRecipientFilter(recipientQuery, entry);
+    return matchesState && matchesRecipientFilter(recipientQuery, entry) && matchesIssueState;
   });
 }
 
@@ -71,6 +85,7 @@ export function buildDigestHref(args: {
   page: number;
   state: DigestFilterState;
   recipientQuery: string;
+  issueState?: DigestIssueFilterState;
 }) {
   const params = new URLSearchParams();
 
@@ -86,6 +101,10 @@ export function buildDigestHref(args: {
     params.set("recipient", args.recipientQuery);
   }
 
+  if (args.issueState && args.issueState !== "all") {
+    params.set("issue", args.issueState);
+  }
+
   const query = params.toString();
 
   return query ? `/admin/digests?${query}` : "/admin/digests";
@@ -95,6 +114,7 @@ export function buildDigestExportHref(args: {
   page: number;
   state: DigestFilterState;
   recipientQuery: string;
+  issueState?: DigestIssueFilterState;
 }) {
   const path = buildDigestHref(args);
   const params = new URLSearchParams(path.split("?")[1] ?? "");
