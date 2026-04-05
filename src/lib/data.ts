@@ -299,13 +299,37 @@ export async function getDashboardData(user: {
       prisma.lead.count({ where: { ...leadWhere, status: "review_ready" } }),
       prisma.lead.count({ where: { ...leadWhere, status: "approved" } }),
       prisma.lead.count({ where: { ...leadWhere, companyResearchStatus: "complete", contactResearchStatus: "complete" } }),
+      prisma.sequenceEmail.count({
+        where: {
+          sequence: {
+            organizationId: user.organizationId,
+          },
+          sendStatus: "queued",
+        },
+      }),
+      prisma.sequenceEmail.count({
+        where: {
+          sequence: {
+            organizationId: user.organizationId,
+          },
+          sendStatus: "failed",
+        },
+      }),
+      prisma.sequenceEmail.count({
+        where: {
+          sequence: {
+            organizationId: user.organizationId,
+          },
+          sendStatus: "sent",
+        },
+      }),
     ]),
     prisma.product.count({
       where: { organizationId: user.organizationId, isActive: true },
     }),
   ]);
 
-  const [inviteHygiene, inviteDigestRecipientIssueState, inviteActivity] =
+  const [inviteHygiene, inviteDigestRecipientIssueState, inviteActivity, outboundActivity] =
     user.role === "sales_manager" || user.role === "admin_operator"
       ? await Promise.all([
           getInviteHygieneAlerts(user.organizationId),
@@ -328,8 +352,29 @@ export async function getDashboardData(user: {
             orderBy: { createdAt: "desc" },
             take: 4,
           }),
+          prisma.auditEvent.findMany({
+            where: {
+              organizationId: user.organizationId,
+              entityType: {
+                in: ["sequence", "sequence_email"],
+              },
+              action: {
+                in: ["send.queued", "send.sent", "send.failed", "send.retry_queued", "send.canceled"],
+              },
+            },
+            include: {
+              actor: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 4,
+          }),
         ])
-      : [{ staleAlerts: [], expiringSoonAlerts: [], alerts: [] }, new Map(), []];
+      : [{ staleAlerts: [], expiringSoonAlerts: [], alerts: [] }, new Map(), [], []];
 
   const inviteIssueSummary = Array.from(inviteDigestRecipientIssueState.values()).reduce(
     (summary, issueState) => {
@@ -557,12 +602,94 @@ export async function getDashboardData(user: {
       reviewReadyCount: metrics[2],
       approvedCount: metrics[3],
       researchCompleteCount: metrics[4],
+      queuedEmailCount: metrics[5],
+      failedEmailCount: metrics[6],
+      sentEmailCount: metrics[7],
       activeProductCount: products,
     },
     staleInviteAlerts: inviteHygiene.staleAlerts.slice(0, 5),
     expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
     inviteIssueSummary,
     inviteActivity: inviteActivityItems,
+    outboundActivity: outboundActivity.map((event) => ({
+      id: event.id,
+      createdAt: event.createdAt,
+      actorName: event.actor?.name ?? event.actor?.email ?? "System",
+      action:
+        event.action === "send.queued"
+          ? "Queued approved sequence"
+          : event.action === "send.sent"
+            ? "Sent outbound email"
+            : event.action === "send.failed"
+              ? "Outbound email failed"
+              : event.action === "send.retry_queued"
+                ? "Queued retry for failed email"
+                : "Canceled pending sends",
+      tone:
+        event.action === "send.sent"
+          ? ("success" as const)
+          : event.action === "send.failed"
+            ? ("warning" as const)
+            : ("neutral" as const),
+      metadata:
+        event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+          ? (event.metadata as Record<string, unknown>)
+          : null,
+    })),
+  };
+}
+
+export async function getOutboundOperationsData(user: {
+  organizationId: string;
+}) {
+  const [emails, recentEvents] = await Promise.all([
+    prisma.sequenceEmail.findMany({
+      where: {
+        sequence: {
+          organizationId: user.organizationId,
+        },
+        sendStatus: {
+          in: ["approved_pending", "queued", "sending", "sent", "failed", "canceled"],
+        },
+      },
+      include: {
+        sequence: {
+          include: {
+            lead: true,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }, { emailOrder: "asc" }],
+      take: 30,
+    }),
+    prisma.auditEvent.findMany({
+      where: {
+        organizationId: user.organizationId,
+        entityType: {
+          in: ["sequence", "sequence_email"],
+        },
+        action: {
+          in: ["send.queued", "send.sent", "send.failed", "send.retry_queued", "send.canceled"],
+        },
+      },
+      include: {
+        actor: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 12,
+    }),
+  ]);
+
+  return {
+    queued: emails.filter((email) => email.sendStatus === "queued" || email.sendStatus === "sending"),
+    failed: emails.filter((email) => email.sendStatus === "failed"),
+    emails,
+    recentEvents,
   };
 }
 

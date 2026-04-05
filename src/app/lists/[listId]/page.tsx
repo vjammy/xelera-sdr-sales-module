@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { bulkApproveAction, runListWorkflowAction } from "@/app/actions";
+import { bulkApproveAction, queueApprovedListSequencesAction, runListWorkflowAction } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
@@ -101,21 +101,38 @@ export default async function LeadListDetailPage({ params }: LeadListDetailPageP
               </h2>
             </div>
             {canBulkApprove(user.role) ? (
-              <form action={bulkApproveAction}>
-                <button
-                  type="submit"
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  Bulk approve selected
-                </button>
-                <div className="hidden">
-                  {list.leads
-                    .filter((lead) => lead.status === "review_ready")
-                    .map((lead) => (
-                      <input key={lead.id} type="checkbox" name="leadIds" value={lead.id} readOnly checked />
-                    ))}
-                </div>
-              </form>
+              <div className="flex flex-wrap gap-3">
+                <form action={bulkApproveAction}>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    Bulk approve selected
+                  </button>
+                  <div className="hidden">
+                    {list.leads
+                      .filter((lead) => lead.status === "review_ready")
+                      .map((lead) => (
+                        <input key={lead.id} type="checkbox" name="leadIds" value={lead.id} readOnly checked />
+                      ))}
+                  </div>
+                </form>
+                <form action={queueApprovedListSequencesAction.bind(null, list.id)}>
+                  <button
+                    type="submit"
+                    className="rounded-full border border-cyan-300 bg-cyan-50 px-5 py-3 text-sm font-semibold text-cyan-950 hover:border-cyan-400 hover:bg-cyan-100"
+                  >
+                    Queue approved sends
+                  </button>
+                  <div className="hidden">
+                    {list.leads
+                      .filter((lead) => lead.status === "approved")
+                      .map((lead) => (
+                        <input key={lead.id} type="checkbox" name="leadIds" value={lead.id} readOnly checked />
+                      ))}
+                  </div>
+                </form>
+              </div>
             ) : null}
           </div>
 
@@ -128,6 +145,7 @@ export default async function LeadListDetailPage({ params }: LeadListDetailPageP
                   <th className="px-4 py-3 font-semibold">Research</th>
                   <th className="px-4 py-3 font-semibold">Sequence</th>
                   <th className="px-4 py-3 font-semibold">Approval</th>
+                  <th className="px-4 py-3 font-semibold">Send</th>
                   <th className="px-4 py-3 font-semibold">Action</th>
                 </tr>
               </thead>
@@ -150,6 +168,15 @@ export default async function LeadListDetailPage({ params }: LeadListDetailPageP
                     </td>
                     <td className="px-4 py-4">
                       <StatusPill value={lead.status} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusPill
+                        value={
+                          lead.sequence?.emails.find((email) => email.sendStatus !== "sent" && email.sendStatus !== "canceled")
+                            ?.sendStatus ??
+                          (lead.sequence?.emails.some((email) => email.sendStatus === "sent") ? "sent" : "draft")
+                        }
+                      />
                     </td>
                     <td className="px-4 py-4">
                       <Link href={`/leads/${lead.id}`} className="font-semibold text-teal-700 hover:text-teal-900">

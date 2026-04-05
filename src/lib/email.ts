@@ -26,6 +26,19 @@ type InviteHygieneDigestInput = {
   }>;
 };
 
+type MagicLinkEmailInput = {
+  url: string;
+  email: string;
+};
+
+type OutboundSequenceEmailInput = {
+  fromEmail: string;
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  body: string;
+};
+
 export type InviteDeliveryResult =
   | {
       state: "manual";
@@ -38,6 +51,18 @@ export type InviteDeliveryResult =
   | {
       state: "failed";
       reason: string;
+    };
+
+export type OutboundDeliveryResult =
+  | {
+      state: "sent";
+      providerMessageId: string | null;
+      provider: string;
+    }
+  | {
+      state: "failed";
+      reason: string;
+      provider: string;
     };
 
 function getResendClient() {
@@ -152,6 +177,58 @@ function buildInviteHygieneDigestEmail(input: InviteHygieneDigestInput) {
   };
 }
 
+function buildMagicLinkEmail(input: MagicLinkEmailInput) {
+  return {
+    subject: "Your Xelera sign-in link",
+    html: `
+      <div style="font-family: Arial, Helvetica, sans-serif; background: #f4f7fb; padding: 32px; color: #0f172a;">
+        <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 24px; padding: 32px; border: 1px solid #dbe4f0;">
+          <p style="margin: 0; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: #0f766e; font-weight: 700;">
+            Xelera.ai
+          </p>
+          <h1 style="margin: 18px 0 12px; font-size: 30px; line-height: 1.15;">
+            Sign in to your SDR workspace
+          </h1>
+          <p style="margin: 0 0 18px; font-size: 16px; line-height: 1.7; color: #334155;">
+            Use the secure sign-in link below to open your Xelera workspace.
+          </p>
+          <a
+            href="${input.url}"
+            style="display: inline-block; padding: 14px 20px; border-radius: 999px; background: #0f172a; color: #ffffff; text-decoration: none; font-weight: 700;"
+          >
+            Open workspace
+          </a>
+          <p style="margin: 24px 0 0; font-size: 14px; line-height: 1.7; color: #475569; word-break: break-word;">
+            ${input.url}
+          </p>
+        </div>
+      </div>
+    `,
+  };
+}
+
+function buildOutboundSequenceEmail(input: OutboundSequenceEmailInput) {
+  return {
+    subject: input.subject,
+    html: `
+      <div style="font-family: Arial, Helvetica, sans-serif; background: #ffffff; color: #0f172a; padding: 12px 0;">
+        <div style="max-width: 640px; margin: 0 auto; line-height: 1.7; white-space: pre-wrap;">
+          ${input.body
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br />")}
+        </div>
+      </div>
+    `,
+  };
+}
+
+function shouldSimulateOutboundFailure(recipientEmail: string) {
+  const failMatch = process.env.OUTBOUND_MOCK_FAIL_MATCH || "force-fail";
+  return recipientEmail.toLowerCase().includes(failMatch.toLowerCase());
+}
+
 export async function deliverInviteEmail(input: InviteEmailInput): Promise<InviteDeliveryResult> {
   const resend = getResendClient();
   const from = process.env.INVITE_FROM_EMAIL || "Xelera <onboarding@resend.dev>";
@@ -230,6 +307,100 @@ export async function deliverInviteHygieneDigestEmail(
     return {
       state: "failed",
       reason: error instanceof Error ? error.message : "Unknown email delivery failure.",
+    };
+  }
+}
+
+export async function deliverMagicLinkEmail(input: MagicLinkEmailInput): Promise<InviteDeliveryResult> {
+  const resend = getResendClient();
+  const from = process.env.AUTH_FROM_EMAIL || process.env.INVITE_FROM_EMAIL || "Xelera <onboarding@resend.dev>";
+
+  if (!resend) {
+    return {
+      state: "manual",
+      reason: "RESEND_API_KEY is not configured.",
+    };
+  }
+
+  const email = buildMagicLinkEmail(input);
+
+  try {
+    const response = await resend.emails.send({
+      from,
+      to: input.email,
+      subject: email.subject,
+      html: email.html,
+    });
+
+    if (response.error) {
+      return {
+        state: "failed",
+        reason: response.error.message,
+      };
+    }
+
+    return {
+      state: "sent",
+      providerMessageId: response.data?.id ?? null,
+    };
+  } catch (error) {
+    return {
+      state: "failed",
+      reason: error instanceof Error ? error.message : "Unknown magic link delivery failure.",
+    };
+  }
+}
+
+export async function deliverOutboundSequenceEmail(
+  input: OutboundSequenceEmailInput,
+): Promise<OutboundDeliveryResult> {
+  const resend = getResendClient();
+  const from = process.env.OUTBOUND_FROM_EMAIL || input.fromEmail || process.env.INVITE_FROM_EMAIL || "Xelera <onboarding@resend.dev>";
+
+  if (shouldSimulateOutboundFailure(input.recipientEmail)) {
+    return {
+      state: "failed",
+      provider: resend ? "resend" : "mock-outbound",
+      reason: "Simulated outbound delivery failure.",
+    };
+  }
+
+  if (!resend) {
+    return {
+      state: "sent",
+      provider: "mock-outbound",
+      providerMessageId: `mock-${Date.now()}`,
+    };
+  }
+
+  const email = buildOutboundSequenceEmail(input);
+
+  try {
+    const response = await resend.emails.send({
+      from,
+      to: input.recipientEmail,
+      subject: email.subject,
+      html: email.html,
+    });
+
+    if (response.error) {
+      return {
+        state: "failed",
+        provider: "resend",
+        reason: response.error.message,
+      };
+    }
+
+    return {
+      state: "sent",
+      provider: "resend",
+      providerMessageId: response.data?.id ?? null,
+    };
+  } catch (error) {
+    return {
+      state: "failed",
+      provider: "resend",
+      reason: error instanceof Error ? error.message : "Unknown outbound email delivery failure.",
     };
   }
 }

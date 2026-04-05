@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 export function LoginForm() {
   const searchParams = useSearchParams();
   const [error, setError] = useState("");
+  const [magicLinkMessage, setMagicLinkMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const activated = searchParams.get("activated") === "1";
   const invitedEmail = searchParams.get("email") ?? "";
@@ -20,6 +21,8 @@ export function LoginForm() {
         const password = String(formData.get("password") ?? "");
 
         startTransition(async () => {
+          setError("");
+          setMagicLinkMessage("");
           const result = await signIn("credentials", {
             email,
             password,
@@ -49,6 +52,9 @@ export function LoginForm() {
           Your invite is active. Sign in with your new password.
         </p>
       ) : null}
+      {magicLinkMessage ? (
+        <p className="rounded-2xl bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-700">{magicLinkMessage}</p>
+      ) : null}
       <label className="block">
         <span className="mb-2 block text-sm font-medium text-slate-700">Email</span>
         <input
@@ -77,6 +83,33 @@ export function LoginForm() {
         className="w-full rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isPending ? "Signing in..." : "Enter workspace"}
+      </button>
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={() => {
+          const emailInput = document.querySelector<HTMLInputElement>('input[name="email"]');
+          const email = emailInput?.value ?? invitedEmail;
+
+          startTransition(async () => {
+            setError("");
+            const result = await signIn("email", {
+              email,
+              redirect: false,
+              callbackUrl: "/",
+            });
+
+            if (result?.error) {
+              setError("We could not send a sign-in link to that email.");
+              return;
+            }
+
+            setMagicLinkMessage("Check your inbox for a secure sign-in link.");
+          });
+        }}
+        className="w-full rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        Email me a sign-in link
       </button>
     </form>
   );

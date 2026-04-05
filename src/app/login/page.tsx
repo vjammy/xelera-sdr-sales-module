@@ -23,10 +23,10 @@ export default async function LoginPage() {
             loop before anything gets approved.
           </p>
           <div className="mt-8 rounded-[26px] border border-teal-900/60 bg-teal-950/30 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-300">Invite-based onboarding</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-300">Pilot auth</p>
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              New users now activate their seat from an invite link, create their own password, and then sign in
-              here. The demo users below still exist for seeded local verification.
+              New users still activate their seat from an invite link, and the pilot now supports managed email
+              sign-in links alongside the seeded password users used for local verification.
             </p>
           </div>
           <div className="mt-10 grid gap-4">

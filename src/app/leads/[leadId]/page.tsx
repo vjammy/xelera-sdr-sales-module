@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import {
   approveSequenceAction,
   pauseSequenceAction,
+  queueApprovedSequenceAction,
   regenerateAllAction,
   regenerateOneAction,
   rejectSequenceAction,
+  retryFailedSequenceEmailAction,
   saveSequenceEditsAction,
 } from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
@@ -12,6 +14,7 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getLeadDetails } from "@/lib/data";
 import { formatDate } from "@/lib/format";
+import { canManageUsers } from "@/lib/permissions";
 
 type LeadDetailPageProps = {
   params: Promise<{ leadId: string }>;
@@ -206,6 +209,57 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
                   Reject
                 </button>
               </form>
+              {canManageUsers(user.role) && lead.sequence.status === "approved" ? (
+                <form action={queueApprovedSequenceAction.bind(null, lead.id)}>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-cyan-200 px-5 py-3 text-sm font-semibold text-cyan-950 hover:bg-cyan-100"
+                  >
+                    Queue approved sequence
+                  </button>
+                </form>
+              ) : null}
+            </div>
+          </article>
+
+          <article className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Outbound Delivery</p>
+            <div className="mt-5 space-y-4">
+              {lead.sequence.emails.map((email) => (
+                <div key={email.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-950">Email {email.emailOrder}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Due {formatDate(email.dueAt, "MMM d, yyyy h:mm a")}
+                      </p>
+                    </div>
+                    <StatusPill value={email.sendStatus} />
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600">
+                    {email.sentAt
+                      ? `Sent ${formatDate(email.sentAt, "MMM d, yyyy h:mm a")}`
+                      : email.failedAt
+                        ? `Failed ${formatDate(email.failedAt, "MMM d, yyyy h:mm a")}`
+                        : email.queuedAt
+                          ? `Queued ${formatDate(email.queuedAt, "MMM d, yyyy h:mm a")}`
+                          : "Not queued for send yet."}
+                  </p>
+                  {email.lastDeliveryError ? (
+                    <p className="mt-2 text-sm font-medium text-rose-700">{email.lastDeliveryError}</p>
+                  ) : null}
+                  {canManageUsers(user.role) && email.sendStatus === "failed" ? (
+                    <form action={retryFailedSequenceEmailAction.bind(null, email.id, lead.id)} className="mt-3">
+                      <button
+                        type="submit"
+                        className="rounded-full border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-900 hover:border-rose-400 hover:bg-rose-50"
+                      >
+                        Retry failed send
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              ))}
             </div>
           </article>
         </div>

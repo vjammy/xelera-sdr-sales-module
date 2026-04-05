@@ -1,9 +1,12 @@
 import { UserRole } from "@prisma/client";
+import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { getServerSession, type DefaultSession, type NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { deliverMagicLinkEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 
 const loginSchema = z.object({
@@ -19,6 +22,7 @@ export type AppUser = DefaultSession["user"] & {
 };
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
   },
@@ -26,6 +30,19 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   providers: [
+    EmailProvider({
+      from: process.env.AUTH_FROM_EMAIL || process.env.INVITE_FROM_EMAIL || "Xelera <onboarding@resend.dev>",
+      async sendVerificationRequest({ identifier, url }) {
+        const delivery = await deliverMagicLinkEmail({
+          email: identifier,
+          url,
+        });
+
+        if (delivery.state === "failed") {
+          throw new Error(delivery.reason);
+        }
+      },
+    }),
     Credentials({
       name: "Credentials",
       credentials: {
@@ -61,6 +78,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.name,
           email: user.email,
+          image: user.image,
           role: user.role,
           organizationId: user.organizationId,
         };
@@ -72,6 +90,17 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = user.role;
         token.organizationId = user.organizationId;
+      }
+
+      if ((!token.role || !token.organizationId) && token.sub) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+        });
+
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.organizationId = dbUser.organizationId;
+        }
       }
 
       return token;

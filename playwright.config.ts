@@ -10,10 +10,10 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev",
+    command: "npm run build && npx next start --port 3000",
     url: "http://localhost:3000/login",
     reuseExistingServer: true,
-    timeout: 120000,
+    timeout: 180000,
     env: {
       DATABASE_URL:
         "postgresql://neondb_owner:npg_XH76IiTONnUY@ep-weathered-flower-aezw517w-pooler.c-2.us-east-2.aws.neon.tech/neondb?channel_binding=require&sslmode=require",

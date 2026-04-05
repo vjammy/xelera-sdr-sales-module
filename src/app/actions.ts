@@ -17,6 +17,7 @@ import {
 } from "@/lib/invites";
 import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { processOutboundEmailQueue, queueSequenceForSend, retryFailedSequenceEmail } from "@/lib/outbound";
 import {
   bulkApproveLeads,
   processLeadList,
@@ -470,6 +471,86 @@ export async function rejectSequenceAction(leadId: string) {
   });
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/lists");
+}
+
+export async function queueApprovedSequenceAction(leadId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to queue outbound sends.");
+  }
+
+  await queueSequenceForSend({
+    leadId,
+    actorId: user.id,
+    organizationId: user.organizationId,
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/lists");
+  revalidatePath("/");
+  revalidatePath("/admin/sends");
+}
+
+export async function retryFailedSequenceEmailAction(sequenceEmailId: string, leadId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to retry failed sends.");
+  }
+
+  await retryFailedSequenceEmail({
+    sequenceEmailId,
+    actorId: user.id,
+    organizationId: user.organizationId,
+  });
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/lists");
+  revalidatePath("/");
+  revalidatePath("/admin/sends");
+}
+
+export async function queueApprovedListSequencesAction(listId: string, formData: FormData) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to queue outbound sends.");
+  }
+
+  const leadIds = formData
+    .getAll("leadIds")
+    .map((value) => String(value))
+    .filter(Boolean);
+
+  for (const leadId of leadIds) {
+    await queueSequenceForSend({
+      leadId,
+      actorId: user.id,
+      organizationId: user.organizationId,
+    });
+  }
+
+  revalidatePath(`/lists/${listId}`);
+  revalidatePath("/lists");
+  revalidatePath("/");
+  revalidatePath("/admin/sends");
+}
+
+export async function processOutboundQueueNowAction() {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to process outbound sends.");
+  }
+
+  await processOutboundEmailQueue({
+    actorId: user.id,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/lists");
+  revalidatePath("/admin/sends");
 }
 
 export async function bulkApproveAction(formData: FormData) {

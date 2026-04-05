@@ -41,6 +41,16 @@ enum SequenceStatus {
   rejected
 }
 
+enum SequenceEmailSendStatus {
+  draft
+  approved_pending
+  queued
+  sending
+  sent
+  failed
+  canceled
+}
+
 enum RunStatus {
   pending
   in_progress
@@ -123,6 +133,8 @@ model User {
   teamId                String?
   name                  String
   email                 String               @unique
+  emailVerified         DateTime?
+  image                 String?
   passwordHash          String?
   role                  UserRole
   title                 String?
@@ -144,6 +156,42 @@ model User {
   auditEvents           AuditEvent[]
   invites               UserInvite[]         @relation("InvitedUser")
   sentInvites           UserInvite[]         @relation("InvitedBy")
+  accounts              Account[]
+  sessions              Session[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model UserInvite {
@@ -330,7 +378,10 @@ model ResearchRun {
   companyId      String?
   kind           String
   status         RunStatus     @default(pending)
+  provider       String?
+  model          String?
   summary        Json?
+  rawOutput      Json?
   errorMessage   String?
   startedAt      DateTime      @default(now())
   completedAt    DateTime?
@@ -345,12 +396,16 @@ model DraftRun {
   leadId            String
   productId         String?
   status            RunStatus     @default(pending)
+  provider          String?
+  model             String?
   selectedProductName String?
   mainAngle         String?
   tone              String?
   painHypothesis    String?
   suggestedCta      String?
   messagingBrief    Json?
+  rawOutput         Json?
+  errorMessage      String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -367,8 +422,11 @@ model GenerationPrompt {
   draftRunId     String?
   createdById    String?
   promptType     String
+  provider       String?
+  model          String?
   targetEmail    Int?
   inputPrompt    String
+  outputText     String?
   metadata       Json?
   createdAt      DateTime      @default(now())
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -407,19 +465,33 @@ model Sequence {
 }
 
 model SequenceEmail {
-  id                      String    @id @default(cuid())
-  sequenceId              String
-  emailOrder              Int
-  subject                 String
-  body                    String
-  scheduledSendOffsetHours Int
-  editStatus              String    @default("draft")
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-  sequence                Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-
-  @@unique([sequenceId, emailOrder])
-}
+    id                      String    @id @default(cuid())
+    sequenceId              String
+    emailOrder              Int
+    subject                 String
+    body                    String
+    scheduledSendOffsetHours Int
+    editStatus              String    @default("draft")
+    sendStatus              SequenceEmailSendStatus @default(draft)
+    dueAt                   DateTime?
+    queuedAt                DateTime?
+    sendingStartedAt        DateTime?
+    sentAt                  DateTime?
+    failedAt                DateTime?
+    canceledAt              DateTime?
+    providerMessageId       String?
+    lastDeliveryError       String?
+    retryCount              Int       @default(0)
+    lastAttemptedAt         DateTime?
+    sendLockId              String?
+    sendLockExpiresAt       DateTime?
+    createdAt               DateTime  @default(now())
+    updatedAt               DateTime  @updatedAt
+    sequence                Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  
+    @@unique([sequenceId, emailOrder])
+    @@index([sendStatus, dueAt])
+  }
 
 model ReviewAction {
   id             String           @id @default(cuid())

@@ -16,6 +16,12 @@ const STATUS_STYLES: Record<string, string> = {
   research_complete: "bg-cyan-100 text-cyan-800",
   draft_pending: "bg-slate-100 text-slate-700",
   draft: "bg-slate-100 text-slate-700",
+  approved_pending: "bg-indigo-100 text-indigo-800",
+  queued: "bg-blue-100 text-blue-800",
+  sending: "bg-amber-100 text-amber-800",
+  sent: "bg-emerald-100 text-emerald-800",
+  failed: "bg-rose-100 text-rose-800",
+  canceled: "bg-slate-200 text-slate-700",
 };
 
 export function StatusPill({ value }: { value: string }) {

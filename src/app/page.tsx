@@ -39,7 +39,7 @@ function getSeverityBadgeClasses(tone: "warning" | "neutral") {
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity } =
+  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity, outboundActivity } =
     await getDashboardData(user);
 
   return (
@@ -76,6 +76,9 @@ export default async function Home() {
           <MetricCard label="Approved" value={metrics.approvedCount} hint="Explicitly approved by a human." />
           <MetricCard label="Research Complete" value={metrics.researchCompleteCount} hint="Company and contact context ready." />
           <MetricCard label="Active Products" value={metrics.activeProductCount} hint="Available positioning angles." />
+          <MetricCard label="Queued Sends" value={metrics.queuedEmailCount} hint="Approved emails waiting to go out." />
+          <MetricCard label="Failed Sends" value={metrics.failedEmailCount} hint="Outbound emails needing retry or review." />
+          <MetricCard label="Sent Emails" value={metrics.sentEmailCount} hint="Outbound emails delivered by the send worker." />
         </div>
       </section>
 
@@ -352,6 +355,47 @@ export default async function Home() {
                       </Link>
                     </div>
                   ) : null}
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {canManageUsers(user.role) && outboundActivity.length ? (
+          <div className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50/90 px-5 py-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Outbound Activity</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Approved sequences are now moving into controlled sending
+                </h2>
+              </div>
+              <Link
+                href="/admin/sends"
+                className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              >
+                Open send operations
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {outboundActivity.map((item) => (
+                <article key={item.id} className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {formatDate(item.createdAt)} by {item.actorName}
+                    </p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getActivityBadgeClasses(
+                        item.tone,
+                      )}`}
+                    >
+                      {item.action}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    {typeof item.metadata?.emailOrder === "number"
+                      ? `Email ${item.metadata.emailOrder} in the sequence was updated by the outbound worker.`
+                      : "A send-queue operation changed outbound state for an approved sequence."}
+                  </p>
                 </article>
               ))}
             </div>

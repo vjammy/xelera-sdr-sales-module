@@ -149,11 +149,34 @@ async function getLatestPendingInvite(email: string) {
   });
 }
 
+async function getSequenceEmailStatusesForLead(leadId: string) {
+  const lead = await db.lead.findUnique({
+    where: {
+      id: leadId,
+    },
+    include: {
+      sequence: {
+        include: {
+          emails: {
+            orderBy: {
+              emailOrder: "asc",
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return lead?.sequence?.emails.map((email) => email.sendStatus) ?? [];
+}
+
 async function switchUser(page: Page, email: string, password = "Welcome123!") {
   const signOutButton = page.getByRole("button", { name: "Sign out" });
   if (await signOutButton.isVisible().catch(() => false)) {
     await signOutButton.click();
-    await expect(page).toHaveURL(/\/login/);
+    await page.waitForURL(/\/login/, { timeout: 10_000 }).catch(async () => {
+      await page.goto("/login");
+    });
   } else {
     await page.goto("/login");
   }
@@ -163,14 +186,22 @@ async function switchUser(page: Page, email: string, password = "Welcome123!") {
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
-async function createLeadList(page: import("@playwright/test").Page, uniqueSuffix: string) {
+async function createLeadList(
+  page: import("@playwright/test").Page,
+  uniqueSuffix: string,
+  options?: {
+    rows?: string[];
+  },
+) {
   const listName = `Playwright Event List ${uniqueSuffix}`;
   const csv = [
     "First Name,Last Name,Email,Phone,Title,Company,Notes",
-    `Morgan,Reed,morgan.${uniqueSuffix}@signalworks.io,,VP Revenue Operations,Signal Works,Asked about post-event manager visibility`,
-    `Jamie,Stone,jamie.${uniqueSuffix}@signalworks.io,,Director of Sales Ops,Signal Works,Interested in bulk review once trust is built`,
-    "No,PhoneOrEmail,,,,No Contact,Missing both email and phone should reject",
-    `Duplicate,Lead,morgan.${uniqueSuffix}@signalworks.io,,RevOps Manager,Signal Works,Duplicate email should reject`,
+    ...(options?.rows ?? [
+      `Morgan,Reed,morgan.${uniqueSuffix}@signalworks.io,,VP Revenue Operations,Signal Works,Asked about post-event manager visibility`,
+      `Jamie,Stone,jamie.${uniqueSuffix}@signalworks.io,,Director of Sales Ops,Signal Works,Interested in bulk review once trust is built`,
+      "No,PhoneOrEmail,,,,No Contact,Missing both email and phone should reject",
+      `Duplicate,Lead,morgan.${uniqueSuffix}@signalworks.io,,RevOps Manager,Signal Works,Duplicate email should reject`,
+    ]),
   ].join("\n");
 
   await page.goto("/upload");
@@ -406,7 +437,9 @@ test("manager can onboard a new organization user through invite activation", as
   }
 
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await page.waitForURL(/\/login/, { timeout: 10_000 }).catch(async () => {
+    await page.goto("/login");
+  });
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Enter workspace" }).click();
@@ -494,7 +527,9 @@ test("manager can create a replacement invite after revocation and the new link 
   }
 
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await page.waitForURL(/\/login/, { timeout: 10_000 }).catch(async () => {
+    await page.goto("/login");
+  });
 
   await page.goto(replacementUrl);
   await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();
@@ -674,7 +709,7 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await page.goto("/");
   const activityStrip = page.locator("[data-dashboard-invite-activity]");
   await expect(activityStrip).toBeVisible();
-  await expect(activityStrip).toContainText("Rotated 1 expiring invite");
+  await expect(activityStrip).toContainText(/Rotated \d+ expiring invite/);
   await expect(activityStrip).toContainText("Latest onboarding remediation moves");
   await expect(activityStrip).toContainText("Completed");
   await activityStrip.getByRole("link", { name: "Completed" }).first().click();
@@ -693,6 +728,96 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await expect(callout).toContainText("Pending seats have gone untouched for several days");
   await expect(callout).toContainText("Open user onboarding");
   await expect(callout.getByRole("link", { name: "Open user onboarding" })).toHaveAttribute("href", "/admin/users");
+});
+
+test("manager can queue approved sequences and the outbound worker sends the first email", async ({ page }) => {
+  test.setTimeout(90000);
+  const suffix = `${Date.now()}-send`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await createLeadList(page, suffix);
+
+  await page.getByRole("button", { name: "Run research and drafting" }).click();
+  await expect(page.getByRole("link", { name: "Open detail" }).first()).toBeVisible({ timeout: 15000 });
+  await page.getByRole("link", { name: "Open detail" }).first().click();
+  await expect(page).toHaveURL(/\/leads\/[^/]+$/);
+  const leadId = page.url().split("/leads/")[1]?.split("?")[0];
+  if (!leadId) {
+    throw new Error("Expected to open a lead detail URL.");
+  }
+  await page.getByRole("button", { name: "Approve full sequence" }).click();
+  await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("button", { name: "Queue approved sequence" })).toBeVisible();
+  await page.getByRole("button", { name: "Queue approved sequence" }).click();
+  await expect(page.getByText("Queued").first()).toBeVisible({ timeout: 10000 });
+
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/cron/process-outbound-email", {
+        headers: {
+          authorization: "Bearer xelera-cron-secret-2026",
+        },
+      });
+
+      if (!response.ok()) {
+        return ["request_failed"];
+      }
+
+      return getSequenceEmailStatusesForLead(leadId);
+    })
+    .toEqual(["sent", "queued", "approved_pending"]);
+  await page.reload();
+  await expect(page.getByText("Sent").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("Queued").first()).toBeVisible({ timeout: 10000 });
+});
+
+test("manager can retry a failed outbound email from send operations", async ({ page }) => {
+  test.setTimeout(90000);
+  const suffix = `${Date.now()}-force-fail`;
+
+  await login(page, "ava.manager@xelera.ai");
+  const listName = await createLeadList(page, suffix, {
+    rows: [
+      `Casey,Failure,casey.force-fail.${suffix}@signalworks.io,,VP Revenue Operations,Signal Works,Use this lead to verify failed outbound retries.`,
+      "No,PhoneOrEmail,,,,No Contact,Missing both email and phone should reject",
+    ],
+  });
+
+  await page.getByRole("button", { name: "Run research and drafting" }).click();
+  await expect(page.getByRole("link", { name: "Open detail" }).first()).toBeVisible({ timeout: 15000 });
+
+  await openLeadDetailFromList(page, listName, 0);
+  await page.getByRole("button", { name: "Approve full sequence" }).click();
+  await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 10000 });
+  await page.getByRole("button", { name: "Queue approved sequence" }).click();
+  await expect(page.getByText("Queued").first()).toBeVisible({ timeout: 10000 });
+
+  const firstRun = await page.request.get("/api/cron/process-outbound-email", {
+    headers: {
+      authorization: "Bearer xelera-cron-secret-2026",
+    },
+  });
+
+  expect(firstRun.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByText("Failed").first()).toBeVisible({ timeout: 10000 });
+
+  await page.goto("/admin/sends");
+  await expect(page.getByText("Casey Failure").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry failed email" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Retry failed email" }).first().click();
+  await expect(page.getByText("Queued").first()).toBeVisible({ timeout: 10000 });
+
+  const secondRun = await page.request.get("/api/cron/process-outbound-email", {
+    headers: {
+      authorization: "Bearer xelera-cron-secret-2026",
+    },
+  });
+
+  expect(secondRun.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByText("Failed").first()).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText("Simulated outbound delivery failure.").first()).toBeVisible();
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

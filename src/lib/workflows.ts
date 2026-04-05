@@ -1,11 +1,12 @@
 import { type Prisma, RunStatus, SequenceStatus, UserRole } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import {
   buildMessagingBrief,
   deriveCompanyProfile,
   deriveContactProfile,
   draftSequence,
-} from "@/lib/mock-ai";
+} from "@/lib/ai-provider";
+import { cancelFutureSequenceEmails } from "@/lib/outbound";
+import { prisma } from "@/lib/prisma";
 
 function coerceStringArray(value: Prisma.JsonValue | null | undefined) {
   if (!Array.isArray(value)) {
@@ -24,6 +25,64 @@ async function writeAuditEvent(args: {
   metadata?: Prisma.InputJsonValue;
 }) {
   await prisma.auditEvent.create({ data: args });
+}
+
+function buildLeadContext(args: {
+  lead: {
+    fullName: string;
+    title?: string | null;
+    contactNotes?: string | null;
+    leadList: {
+      name: string;
+      eventSourceName: string;
+      notes?: string | null;
+    };
+  };
+  companyName: string;
+  companyDomain?: string | null;
+  fallbackTitle?: string | null;
+}) {
+  return {
+    fullName: args.lead.fullName,
+    firstName: args.lead.fullName.split(" ")[0] || "there",
+    companyName: args.companyName,
+    companyDomain: args.companyDomain ?? "unknown domain",
+    title: args.lead.title ?? args.fallbackTitle ?? "buyer",
+    listName: args.lead.leadList.name,
+    eventSourceName: args.lead.leadList.eventSourceName,
+    eventNotes: args.lead.leadList.notes ?? "",
+    contactNotes: args.lead.contactNotes ?? "",
+  };
+}
+
+function buildProductContext(product: {
+  name: string;
+  description: string;
+  targetPersona: string;
+  problemStatement: string;
+  keyBenefits: Prisma.JsonValue;
+  samplePitch: string;
+}) {
+  return {
+    name: product.name,
+    description: product.description,
+    targetPersona: product.targetPersona,
+    problemStatement: product.problemStatement,
+    keyBenefits: coerceStringArray(product.keyBenefits),
+    samplePitch: product.samplePitch,
+  };
+}
+
+function buildSalespersonContext(user: {
+  name: string;
+  title?: string | null;
+  emailPromptPreference?: string | null;
+}) {
+  return {
+    name: user.name.split(" ")[0] || user.name,
+    title: user.title ?? "Salesperson",
+    preference: user.emailPromptPreference ?? "",
+  };
 }
 
 export async function processLeadWorkflow(leadId: string, actorId: string) {
@@ -50,41 +109,56 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
     throw new Error("At least one active product is required before drafting.");
   }
 
-  const companyProfile = lead.company
+  const companyResearch = lead.company
     ? {
-        name: lead.company.name,
-        domain: lead.company.domain ?? undefined,
-        industry: lead.company.industry ?? undefined,
-        employeeSize: lead.company.employeeSize ?? undefined,
-        geography: lead.company.geography ?? undefined,
-        summary: lead.company.summary ?? undefined,
-        likelyNeeds: coerceStringArray(lead.company.likelyNeeds),
+        provider: "seeded",
+        model: "seeded",
+        output: {
+          name: lead.company.name,
+          domain: lead.company.domain ?? undefined,
+          industry: lead.company.industry ?? undefined,
+          employeeSize: lead.company.employeeSize ?? undefined,
+          geography: lead.company.geography ?? undefined,
+          summary: lead.company.summary ?? undefined,
+          likelyNeeds: coerceStringArray(lead.company.likelyNeeds),
+        },
+        rawOutput: null,
       }
-    : deriveCompanyProfile(lead.email, null);
+    : await deriveCompanyProfile({
+        email: lead.email,
+        companyName: null,
+        eventSourceName: lead.leadList.eventSourceName,
+        contactNotes: lead.contactNotes,
+      });
 
   const company = lead.company
     ? await prisma.company.update({
         where: { id: lead.company.id },
-        data: companyProfile,
+        data: companyResearch.output,
       })
     : await prisma.company.create({
         data: {
           organizationId: lead.organizationId,
-          ...companyProfile,
-          name: companyProfile.name,
+          ...companyResearch.output,
+          name: companyResearch.output.name,
         },
       });
 
-  const contactProfile = deriveContactProfile(lead.title, lead.contactNotes);
+  const contactResearch = await deriveContactProfile({
+    title: lead.title,
+    contactNotes: lead.contactNotes,
+    companyName: company.name,
+  });
+
   const contact = lead.contact
     ? await prisma.contact.update({
         where: { id: lead.contact.id },
         data: {
           companyId: company.id,
-          roleSummary: contactProfile.roleSummary,
-          responsibilities: contactProfile.responsibilities,
-          buyerAngle: contactProfile.buyerAngle,
-          personalizationHooks: contactProfile.personalizationHooks,
+          roleSummary: contactResearch.output.roleSummary,
+          responsibilities: contactResearch.output.responsibilities,
+          buyerAngle: contactResearch.output.buyerAngle,
+          personalizationHooks: contactResearch.output.personalizationHooks,
         },
       })
     : await prisma.contact.create({
@@ -95,10 +169,10 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
           email: lead.email,
           phone: lead.phone,
           title: lead.title,
-          roleSummary: contactProfile.roleSummary,
-          responsibilities: contactProfile.responsibilities,
-          buyerAngle: contactProfile.buyerAngle,
-          personalizationHooks: contactProfile.personalizationHooks,
+          roleSummary: contactResearch.output.roleSummary,
+          responsibilities: contactResearch.output.responsibilities,
+          buyerAngle: contactResearch.output.buyerAngle,
+          personalizationHooks: contactResearch.output.personalizationHooks,
         },
       });
 
@@ -110,7 +184,10 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
         companyId: company.id,
         kind: "company_enrichment",
         status: RunStatus.complete,
-        summary: companyProfile,
+        provider: companyResearch.provider,
+        model: companyResearch.model,
+        summary: companyResearch.output,
+        rawOutput: companyResearch.rawOutput as Prisma.InputJsonValue,
         completedAt: new Date(),
       },
       {
@@ -119,38 +196,29 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
         companyId: company.id,
         kind: "contact_enrichment",
         status: RunStatus.complete,
-        summary: contactProfile,
+        provider: contactResearch.provider,
+        model: contactResearch.model,
+        summary: contactResearch.output,
+        rawOutput: contactResearch.rawOutput as Prisma.InputJsonValue,
         completedAt: new Date(),
       },
     ],
   });
 
-  const brief = buildMessagingBrief(
-    {
-      fullName: lead.fullName,
-      firstName: lead.fullName.split(" ")[0] || "there",
-      companyName: company.name,
-      companyDomain: company.domain ?? "unknown domain",
-      title: lead.title ?? contact.title ?? "buyer",
-      listName: lead.leadList.name,
-      eventSourceName: lead.leadList.eventSourceName,
-      eventNotes: lead.leadList.notes ?? "",
-      contactNotes: lead.contactNotes ?? "",
-    },
-    {
-      name: activeProduct.name,
-      description: activeProduct.description,
-      targetPersona: activeProduct.targetPersona,
-      problemStatement: activeProduct.problemStatement,
-      keyBenefits: coerceStringArray(activeProduct.keyBenefits),
-      samplePitch: activeProduct.samplePitch,
-    },
-    {
-      name: lead.assignedSalesperson.name.split(" ")[0] || lead.assignedSalesperson.name,
-      title: lead.assignedSalesperson.title ?? "Salesperson",
-      preference: lead.assignedSalesperson.emailPromptPreference ?? "",
-    },
-  );
+  const leadContext = buildLeadContext({
+    lead,
+    companyName: company.name,
+    companyDomain: company.domain,
+    fallbackTitle: contact.title,
+  });
+  const productContext = buildProductContext(activeProduct);
+  const salespersonContext = buildSalespersonContext(lead.assignedSalesperson);
+
+  const briefGeneration = await buildMessagingBrief({
+    lead: leadContext,
+    product: productContext,
+    salesperson: salespersonContext,
+  });
 
   const draftRun = await prisma.draftRun.create({
     data: {
@@ -158,42 +226,24 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
       leadId: lead.id,
       productId: activeProduct.id,
       status: RunStatus.complete,
+      provider: briefGeneration.provider,
+      model: briefGeneration.model,
       selectedProductName: activeProduct.name,
-      mainAngle: brief.mainOutreachAngle,
-      tone: brief.tone,
-      painHypothesis: brief.painHypothesis,
-      suggestedCta: brief.suggestedCta,
-      messagingBrief: brief,
+      mainAngle: briefGeneration.output.mainOutreachAngle,
+      tone: briefGeneration.output.tone,
+      painHypothesis: briefGeneration.output.painHypothesis,
+      suggestedCta: briefGeneration.output.suggestedCta,
+      messagingBrief: briefGeneration.output,
+      rawOutput: briefGeneration.rawOutput as Prisma.InputJsonValue,
     },
   });
 
-  const draftedEmails = draftSequence(
-    {
-      fullName: lead.fullName,
-      firstName: lead.fullName.split(" ")[0] || "there",
-      companyName: company.name,
-      companyDomain: company.domain ?? "unknown domain",
-      title: lead.title ?? contact.title ?? "buyer",
-      listName: lead.leadList.name,
-      eventSourceName: lead.leadList.eventSourceName,
-      eventNotes: lead.leadList.notes ?? "",
-      contactNotes: lead.contactNotes ?? "",
-    },
-    {
-      name: activeProduct.name,
-      description: activeProduct.description,
-      targetPersona: activeProduct.targetPersona,
-      problemStatement: activeProduct.problemStatement,
-      keyBenefits: coerceStringArray(activeProduct.keyBenefits),
-      samplePitch: activeProduct.samplePitch,
-    },
-    {
-      name: lead.assignedSalesperson.name.split(" ")[0] || lead.assignedSalesperson.name,
-      title: lead.assignedSalesperson.title ?? "Salesperson",
-      preference: lead.assignedSalesperson.emailPromptPreference ?? "",
-    },
-    brief,
-  );
+  const draftedSequence = await draftSequence({
+    lead: leadContext,
+    product: productContext,
+    salesperson: salespersonContext,
+    brief: briefGeneration.output,
+  });
 
   await prisma.sequence.deleteMany({
     where: { leadId: lead.id },
@@ -207,15 +257,15 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
       draftRunId: draftRun.id,
       status: SequenceStatus.review_ready,
       selectedProductName: activeProduct.name,
-      valueProposition: brief.valueProposition,
-      targetAngle: brief.targetAngle,
-      relevantBenefits: brief.relevantBenefits,
-      mainOutreachAngle: brief.mainOutreachAngle,
-      tone: brief.tone,
-      painHypothesis: brief.painHypothesis,
-      suggestedCta: brief.suggestedCta,
+      valueProposition: briefGeneration.output.valueProposition,
+      targetAngle: briefGeneration.output.targetAngle,
+      relevantBenefits: briefGeneration.output.relevantBenefits,
+      mainOutreachAngle: briefGeneration.output.mainOutreachAngle,
+      tone: briefGeneration.output.tone,
+      painHypothesis: briefGeneration.output.painHypothesis,
+      suggestedCta: briefGeneration.output.suggestedCta,
       emails: {
-        create: draftedEmails,
+        create: draftedSequence.output,
       },
     },
   });
@@ -254,6 +304,8 @@ export async function processLeadWorkflow(leadId: string, actorId: string) {
     metadata: {
       sequenceId: sequence.id,
       draftRunId: draftRun.id,
+      researchProvider: companyResearch.provider,
+      draftProvider: draftedSequence.provider,
     },
   });
 }
@@ -381,53 +433,32 @@ export async function regenerateSequence(args: {
     throw new Error("Product context missing.");
   }
 
-  const brief = {
-    valueProposition: lead.sequence.valueProposition ?? "",
-    relevantBenefits: coerceStringArray(lead.sequence.relevantBenefits),
-  };
-
-  const regenerated = draftSequence(
-    {
-      fullName: lead.fullName,
-      firstName: lead.fullName.split(" ")[0] || "there",
+  const regeneratedSequence = await draftSequence({
+    lead: buildLeadContext({
+      lead,
       companyName: lead.company.name,
-      companyDomain: lead.company.domain ?? "unknown domain",
-      title: lead.title ?? lead.contact?.title ?? "buyer",
-      listName: lead.leadList.name,
-      eventSourceName: lead.leadList.eventSourceName,
-      eventNotes: lead.leadList.notes ?? "",
-      contactNotes: lead.contactNotes ?? "",
-    },
-    {
-      name: product.name,
-      description: product.description,
-      targetPersona: product.targetPersona,
-      problemStatement: product.problemStatement,
-      keyBenefits: coerceStringArray(product.keyBenefits),
-      samplePitch: product.samplePitch,
-    },
-    {
-      name: lead.assignedSalesperson.name.split(" ")[0] || lead.assignedSalesperson.name,
-      title: lead.assignedSalesperson.title ?? "Salesperson",
-      preference: lead.assignedSalesperson.emailPromptPreference ?? "",
-    },
-    {
+      companyDomain: lead.company.domain,
+      fallbackTitle: lead.contact?.title,
+    }),
+    product: buildProductContext(product),
+    salesperson: buildSalespersonContext(lead.assignedSalesperson),
+    brief: {
       selectedProductName: lead.sequence.selectedProductName ?? product.name,
-      valueProposition: brief.valueProposition,
+      valueProposition: lead.sequence.valueProposition ?? "",
       targetAngle: lead.sequence.targetAngle ?? "",
-      relevantBenefits: brief.relevantBenefits,
+      relevantBenefits: coerceStringArray(lead.sequence.relevantBenefits),
       mainOutreachAngle: lead.sequence.mainOutreachAngle ?? "",
       tone: lead.sequence.tone ?? "",
       painHypothesis: lead.sequence.painHypothesis ?? "",
       suggestedCta: lead.sequence.suggestedCta ?? "",
       note: lead.contactNotes ?? "",
     },
-    args.prompt,
-  );
+    prompt: args.prompt,
+  });
 
   const toUpdate = args.emailOrder
-    ? regenerated.filter((item) => item.emailOrder === args.emailOrder)
-    : regenerated;
+    ? regeneratedSequence.output.filter((item) => item.emailOrder === args.emailOrder)
+    : regeneratedSequence.output;
 
   await prisma.generationPrompt.create({
     data: {
@@ -435,8 +466,12 @@ export async function regenerateSequence(args: {
       leadId: lead.id,
       createdById: args.actorId,
       promptType: args.emailOrder ? "regenerate_one" : "regenerate_all",
+      provider: regeneratedSequence.provider,
+      model: regeneratedSequence.model,
       targetEmail: args.emailOrder,
       inputPrompt: args.prompt,
+      outputText: JSON.stringify(toUpdate),
+      metadata: regeneratedSequence.rawOutput as Prisma.InputJsonValue,
     },
   });
 
@@ -478,7 +513,14 @@ export async function setSequenceStatus(args: {
 }) {
   const lead = await prisma.lead.findUnique({
     where: { id: args.leadId },
-    include: { sequence: true, leadList: true },
+    include: {
+      sequence: {
+        include: {
+          emails: true,
+        },
+      },
+      leadList: true,
+    },
   });
 
   if (!lead?.sequence) {
@@ -508,6 +550,29 @@ export async function setSequenceStatus(args: {
       status: leadStatusMap[args.status],
     },
   });
+
+  if (args.status === "approved") {
+    await prisma.sequenceEmail.updateMany({
+      where: {
+        sequenceId: lead.sequence.id,
+        sendStatus: "draft",
+      },
+      data: {
+        sendStatus: "approved_pending",
+        canceledAt: null,
+        lastDeliveryError: null,
+      },
+    });
+  }
+
+  if (args.status === "paused" || args.status === "rejected") {
+    await cancelFutureSequenceEmails({
+      sequenceId: lead.sequence.id,
+      actorId: args.actorId,
+      organizationId: lead.organizationId,
+      reason: args.status === "paused" ? "Sequence paused by reviewer." : "Sequence rejected by reviewer.",
+    });
+  }
 
   const totalLeads = await prisma.lead.count({
     where: { leadListId: lead.leadListId },
