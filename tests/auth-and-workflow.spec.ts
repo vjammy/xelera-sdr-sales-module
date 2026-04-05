@@ -517,6 +517,7 @@ test("manager dashboard flags pending invites that have gone stale", async ({ pa
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
+  test.setTimeout(90000);
   const suffix = Date.now();
   const email = `digest.rep.${suffix}@xelera.ai`;
   const name = `Digest Rep ${suffix}`;
@@ -611,6 +612,13 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByRole("link", { name: /Unresolved Recipient Issues/i }).click();
   await expect(page).toHaveURL(/issue=active_issue/);
   await expect(page.locator("[data-digest-filter-summary]")).toContainText("unresolved issues");
+  await page.goto("/");
+  const dashboardIssueSummary = page.locator("[data-dashboard-digest-issue-summary]");
+  await expect(dashboardIssueSummary).toBeVisible();
+  await expect(dashboardIssueSummary).toContainText("Unresolved Recipient Issues");
+  await expect(dashboardIssueSummary).toContainText("Reviewed Recipient Issues");
+  await dashboardIssueSummary.getByRole("link", { name: /Unresolved Recipient Issues/i }).click();
+  await expect(page).toHaveURL(/\/admin\/digests\?issue=active_issue/);
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
   await page.getByRole("button", { name: "Run digest now" }).click();

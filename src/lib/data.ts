@@ -3,6 +3,161 @@ import { canViewAllWork } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { expireInviteIfNeeded } from "@/lib/invites";
 
+function getRecipientIssueStateMap(events: Array<{
+  id: string;
+  createdAt: Date;
+  metadata: unknown;
+}>) {
+  const recipientEmails = Array.from(
+    new Set(
+      events.flatMap((event) => {
+        const metadata =
+          event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+            ? (event.metadata as Record<string, unknown>)
+            : null;
+        const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+          ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
+          : [];
+
+        return recipientDeliveries
+          .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
+          .filter((email): email is string => Boolean(email));
+      }),
+    ),
+  );
+
+  return { recipientEmails };
+}
+
+async function getInviteDigestRecipientIssueState(organizationId: string) {
+  const events = await prisma.auditEvent.findMany({
+    where: {
+      organizationId,
+      entityType: "invite_hygiene_digest",
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const { recipientEmails } = getRecipientIssueStateMap(events);
+
+  const reviewEvents = recipientEmails.length
+    ? await prisma.auditEvent.findMany({
+        where: {
+          organizationId,
+          entityType: "invite_digest_recipient_review",
+          entityId: { in: recipientEmails },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+
+  const latestReviewByRecipient = new Map<
+    string,
+    {
+      action: string;
+      createdAt: Date;
+      actorName: string | null;
+      actorEmail: string | null;
+    }
+  >();
+
+  for (const event of reviewEvents) {
+    if (latestReviewByRecipient.has(event.entityId)) {
+      continue;
+    }
+
+    const metadata =
+      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? (event.metadata as Record<string, unknown>)
+        : null;
+
+    latestReviewByRecipient.set(event.entityId, {
+      action: event.action,
+      createdAt: event.createdAt,
+      actorName: typeof metadata?.actorName === "string" ? metadata.actorName : null,
+      actorEmail: typeof metadata?.actorEmail === "string" ? metadata.actorEmail : null,
+    });
+  }
+
+  const digestHistoryByRecipient = new Map<
+    string,
+    Array<{
+      createdAt: Date;
+      deliveryState: string;
+    }>
+  >();
+
+  for (const event of events) {
+    const metadata =
+      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? (event.metadata as Record<string, unknown>)
+        : null;
+    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+      ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
+      : [];
+
+    for (const delivery of recipientDeliveries) {
+      const email = typeof delivery.email === "string" ? delivery.email : null;
+      const deliveryState = typeof delivery.deliveryState === "string" ? delivery.deliveryState : "skipped";
+
+      if (!email) {
+        continue;
+      }
+
+      const history = digestHistoryByRecipient.get(email) ?? [];
+      history.push({
+        createdAt: event.createdAt,
+        deliveryState,
+      });
+      digestHistoryByRecipient.set(email, history);
+    }
+  }
+
+  return new Map(
+    Array.from(digestHistoryByRecipient.entries()).map(([email, history]) => {
+      const recentAttentionRuns = history.filter(
+        (entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed",
+      ).length;
+      let currentAttentionStreak = 0;
+
+      for (const entry of history) {
+        if (entry.deliveryState === "manual" || entry.deliveryState === "failed") {
+          currentAttentionStreak += 1;
+          continue;
+        }
+
+        break;
+      }
+
+      const latestAttentionRun =
+        history.find((entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed") ?? null;
+      const latestReview = latestReviewByRecipient.get(email) ?? null;
+      const needsAttention = recentAttentionRuns >= 2 || currentAttentionStreak >= 2;
+      const reviewCoversLatestIssue =
+        latestReview?.action === "acknowledged" &&
+        latestAttentionRun &&
+        latestReview.createdAt >= latestAttentionRun.createdAt;
+
+      return [
+        email,
+        {
+          recentAttentionRuns,
+          currentAttentionStreak,
+          reviewState:
+            needsAttention && reviewCoversLatestIssue
+              ? "reviewed"
+              : needsAttention
+                ? "active_issue"
+                : "none",
+          reviewActorName: latestReview?.actorName ?? null,
+          reviewActorEmail: latestReview?.actorEmail ?? null,
+          reviewCreatedAt: latestReview?.createdAt ?? null,
+        },
+      ];
+    }),
+  );
+}
+
 export async function getDashboardData(user: {
   id: string;
   organizationId: string;
@@ -40,10 +195,28 @@ export async function getDashboardData(user: {
     }),
   ]);
 
-  const inviteHygiene =
+  const [inviteHygiene, inviteDigestRecipientIssueState] =
     user.role === "sales_manager" || user.role === "admin_operator"
-      ? await getInviteHygieneAlerts(user.organizationId)
-      : { staleAlerts: [], expiringSoonAlerts: [], alerts: [] };
+      ? await Promise.all([
+          getInviteHygieneAlerts(user.organizationId),
+          getInviteDigestRecipientIssueState(user.organizationId),
+        ])
+      : [{ staleAlerts: [], expiringSoonAlerts: [], alerts: [] }, new Map()];
+
+  const inviteIssueSummary = Array.from(inviteDigestRecipientIssueState.values()).reduce(
+    (summary, issueState) => {
+      if (issueState.reviewState === "active_issue") {
+        summary.activeIssueCount += 1;
+      }
+
+      if (issueState.reviewState === "reviewed") {
+        summary.reviewedIssueCount += 1;
+      }
+
+      return summary;
+    },
+    { activeIssueCount: 0, reviewedIssueCount: 0 },
+  );
 
   return {
     leadLists,
@@ -57,6 +230,7 @@ export async function getDashboardData(user: {
     },
     staleInviteAlerts: inviteHygiene.staleAlerts.slice(0, 5),
     expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
+    inviteIssueSummary,
   };
 }
 
@@ -247,140 +421,7 @@ export async function getOrganizationInviteDigestHistory(organizationId: string)
     orderBy: { createdAt: "desc" },
   });
 
-  const recipientEmails = Array.from(
-    new Set(
-      events.flatMap((event) => {
-        const metadata =
-          event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
-            ? (event.metadata as Record<string, unknown>)
-            : null;
-        const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
-          ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
-          : [];
-
-        return recipientDeliveries
-          .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
-          .filter((email): email is string => Boolean(email));
-      }),
-    ),
-  );
-
-  const reviewEvents = recipientEmails.length
-    ? await prisma.auditEvent.findMany({
-        where: {
-          organizationId,
-          entityType: "invite_digest_recipient_review",
-          entityId: { in: recipientEmails },
-        },
-        orderBy: { createdAt: "desc" },
-      })
-    : [];
-
-  const latestReviewByRecipient = new Map<
-    string,
-    {
-      action: string;
-      createdAt: Date;
-      actorName: string | null;
-      actorEmail: string | null;
-    }
-  >();
-
-  for (const event of reviewEvents) {
-    if (latestReviewByRecipient.has(event.entityId)) {
-      continue;
-    }
-
-    const metadata =
-      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
-        ? (event.metadata as Record<string, unknown>)
-        : null;
-
-    latestReviewByRecipient.set(event.entityId, {
-      action: event.action,
-      createdAt: event.createdAt,
-      actorName: typeof metadata?.actorName === "string" ? metadata.actorName : null,
-      actorEmail: typeof metadata?.actorEmail === "string" ? metadata.actorEmail : null,
-    });
-  }
-
-  const digestHistoryByRecipient = new Map<
-    string,
-    Array<{
-      createdAt: Date;
-      deliveryState: string;
-    }>
-  >();
-
-  for (const event of events) {
-    const metadata =
-      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
-        ? (event.metadata as Record<string, unknown>)
-        : null;
-    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
-      ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
-      : [];
-
-    for (const delivery of recipientDeliveries) {
-      const email = typeof delivery.email === "string" ? delivery.email : null;
-      const deliveryState = typeof delivery.deliveryState === "string" ? delivery.deliveryState : "skipped";
-
-      if (!email) {
-        continue;
-      }
-
-      const history = digestHistoryByRecipient.get(email) ?? [];
-      history.push({
-        createdAt: event.createdAt,
-        deliveryState,
-      });
-      digestHistoryByRecipient.set(email, history);
-    }
-  }
-
-  const recipientIssueState = new Map(
-    Array.from(digestHistoryByRecipient.entries()).map(([email, history]) => {
-      const recentAttentionRuns = history.filter(
-        (entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed",
-      ).length;
-      let currentAttentionStreak = 0;
-
-      for (const entry of history) {
-        if (entry.deliveryState === "manual" || entry.deliveryState === "failed") {
-          currentAttentionStreak += 1;
-          continue;
-        }
-
-        break;
-      }
-
-      const latestAttentionRun =
-        history.find((entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed") ?? null;
-      const latestReview = latestReviewByRecipient.get(email) ?? null;
-      const needsAttention = recentAttentionRuns >= 2 || currentAttentionStreak >= 2;
-      const reviewCoversLatestIssue =
-        latestReview?.action === "acknowledged" &&
-        latestAttentionRun &&
-        latestReview.createdAt >= latestAttentionRun.createdAt;
-
-      return [
-        email,
-        {
-          recentAttentionRuns,
-          currentAttentionStreak,
-          reviewState:
-            needsAttention && reviewCoversLatestIssue
-              ? "reviewed"
-              : needsAttention
-                ? "active_issue"
-                : "none",
-          reviewActorName: latestReview?.actorName ?? null,
-          reviewActorEmail: latestReview?.actorEmail ?? null,
-          reviewCreatedAt: latestReview?.createdAt ?? null,
-        },
-      ];
-    }),
-  );
+  const recipientIssueState = await getInviteDigestRecipientIssueState(organizationId);
 
   return events.map((event) => {
     const metadata =

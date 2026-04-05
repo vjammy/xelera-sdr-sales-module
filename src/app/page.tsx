@@ -18,7 +18,7 @@ function formatInviteAge(date: Date) {
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics, staleInviteAlerts } = await getDashboardData(user);
+  const { leadLists, metrics, staleInviteAlerts, inviteIssueSummary } = await getDashboardData(user);
 
   return (
     <WorkspaceShell user={user}>
@@ -108,6 +108,62 @@ export default async function Home() {
                   </article>
                 );
               })}
+            </div>
+          </div>
+        ) : null}
+        {canManageUsers(user.role) &&
+        (inviteIssueSummary.activeIssueCount > 0 || inviteIssueSummary.reviewedIssueCount > 0) ? (
+          <div
+            data-dashboard-digest-issue-summary
+            className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50/90 px-5 py-5"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Digest Triage</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Onboarding delivery issues are ready for manager review
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                  Review unresolved repeated delivery issues quickly, or jump into the reviewed set to confirm prior
+                  triage decisions.
+                </p>
+              </div>
+              <Link
+                href="/admin/digests"
+                className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Open digest operations
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              <Link
+                href="/admin/digests?issue=active_issue"
+                className="rounded-[24px] border border-amber-200 bg-white/90 px-4 py-4 transition hover:border-amber-300 hover:bg-amber-50/70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">
+                  Unresolved Recipient Issues
+                </p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">
+                  {inviteIssueSummary.activeIssueCount}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Recipients with repeated manual fallback or failed digest delivery that still need attention.
+                </p>
+              </Link>
+              <Link
+                href="/admin/digests?issue=reviewed"
+                className="rounded-[24px] border border-emerald-200 bg-white/90 px-4 py-4 transition hover:border-emerald-300 hover:bg-emerald-50/70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-900">
+                  Reviewed Recipient Issues
+                </p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">
+                  {inviteIssueSummary.reviewedIssueCount}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Repeated delivery issues that have already been acknowledged by a manager.
+                </p>
+              </Link>
             </div>
           </div>
         ) : null}
