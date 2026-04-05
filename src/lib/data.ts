@@ -972,6 +972,45 @@ export async function getOrganizationUsers(organizationId: string) {
   });
 }
 
+export async function getProviderVerificationHistory(organizationId: string) {
+  const events = await prisma.auditEvent.findMany({
+    where: {
+      organizationId,
+      entityType: "provider_setup_verification",
+    },
+    include: {
+      actor: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  return events.map((event) => {
+    const providerLabel =
+      event.entityId === "auth_email"
+        ? "Auth sign-in email"
+        : event.entityId === "outbound_email"
+          ? "Outbound email delivery"
+          : event.entityId === "ai_generation"
+            ? "AI research and drafting"
+            : "Cron protection";
+
+    return {
+      id: event.id,
+      providerKey: event.entityId,
+      providerLabel,
+      action: event.action,
+      actorName: event.actor?.name ?? event.actor?.email ?? "Manager",
+      createdAt: event.createdAt,
+    };
+  });
+}
+
 export async function getInviteByToken(token: string) {
   const invite = await prisma.userInvite.findUnique({
     where: { token },

@@ -895,6 +895,16 @@ test("manager can see provider readiness from send operations", async ({ page })
   await cronVerificationState.getByRole("button", { name: "Reopen verification" }).click();
   await expect(cronVerificationState).toContainText("Needs recheck");
   await expect(cronVerificationState).toContainText("Verification was reopened by Ava Manager");
+  const verificationHistoryPreview = page.locator("[data-provider-verification-history-preview]");
+  await expect(verificationHistoryPreview).toContainText("Cron protection");
+  await expect(verificationHistoryPreview).toContainText("Reopened");
+  await page.getByRole("link", { name: "View full history" }).click();
+  await expect(page).toHaveURL("/admin/setup/history");
+  const verificationHistory = page.locator("[data-provider-verification-history]");
+  await expect(verificationHistory).toContainText("Cron protection");
+  await expect(verificationHistory).toContainText("Verified");
+  await expect(verificationHistory).toContainText("Reopened");
+  await expect(verificationHistory).toContainText("Ava Manager");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

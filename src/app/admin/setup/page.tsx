@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { updateProviderVerificationAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
+import { getProviderVerificationHistory } from "@/lib/data";
 import { getProviderReadiness } from "@/lib/provider-readiness";
 import { formatDate } from "@/lib/format";
 import { canManageUsers } from "@/lib/permissions";
@@ -26,7 +27,10 @@ export default async function SetupPage() {
     notFound();
   }
 
-  const readiness = await getProviderReadiness(user.organizationId);
+  const [readiness, verificationHistory] = await Promise.all([
+    getProviderReadiness(user.organizationId),
+    getProviderVerificationHistory(user.organizationId),
+  ]);
 
   return (
     <WorkspaceShell user={user}>
@@ -64,6 +68,12 @@ export default async function SetupPage() {
               className="rounded-full border border-slate-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-slate-500"
             >
               Return to dashboard
+            </Link>
+            <Link
+              href="/admin/setup/history"
+              className="rounded-full border border-slate-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-slate-500"
+            >
+              Open setup history
             </Link>
           </div>
         </article>
@@ -170,6 +180,48 @@ export default async function SetupPage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+      <section className="mt-6 rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Verification Activity</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+              Recent provider verification changes
+            </h2>
+          </div>
+          <Link
+            href="/admin/setup/history"
+            className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+          >
+            View full history
+          </Link>
+        </div>
+        <div className="mt-5 space-y-3" data-provider-verification-history-preview>
+          {verificationHistory.slice(0, 4).length ? (
+            verificationHistory.slice(0, 4).map((event) => (
+              <article key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-base font-semibold text-slate-950">{event.providerLabel}</p>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getReadinessBadgeClasses(
+                      event.action === "verified" ? "success" : "warning",
+                    )}`}
+                  >
+                    {event.action === "verified" ? "Verified" : "Reopened"}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {event.actorName} marked this area {event.action === "verified" ? "verified" : "for recheck"} on{" "}
+                  {formatDate(event.createdAt, "MMM d, yyyy h:mm a")}.
+                </p>
+              </article>
+            ))
+          ) : (
+            <p className="text-sm leading-7 text-slate-600">
+              No provider verification changes have been recorded yet.
+            </p>
+          )}
         </div>
       </section>
     </WorkspaceShell>
