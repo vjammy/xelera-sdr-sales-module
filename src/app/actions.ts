@@ -1,11 +1,13 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { parseLeadFile } from "@/lib/importer";
-import { canBulkApprove, canManageProducts } from "@/lib/permissions";
+import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import {
   bulkApproveLeads,
@@ -25,6 +27,15 @@ const productSchema = z.object({
   keyBenefits: z.string().min(10),
   samplePitch: z.string().min(10),
   pricingNotes: z.string().optional(),
+});
+
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  role: z.nativeEnum(UserRole),
+  title: z.string().optional(),
+  phone: z.string().optional(),
+  password: z.string().min(8),
 });
 
 export async function createLeadListAction(formData: FormData) {
@@ -292,4 +303,45 @@ export async function saveProductAction(formData: FormData) {
   });
 
   revalidatePath("/admin/products");
+}
+
+export async function saveUserAction(formData: FormData) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  const parsed = userSchema.parse({
+    name: formData.get("name"),
+    email: String(formData.get("email") ?? "").toLowerCase(),
+    role: formData.get("role"),
+    title: formData.get("title"),
+    phone: formData.get("phone"),
+    password: formData.get("password"),
+  });
+
+  const existing = await prisma.user.findUnique({
+    where: { email: parsed.email },
+  });
+
+  if (existing) {
+    throw new Error("A user with that email already exists.");
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.password, 10);
+
+  await prisma.user.create({
+    data: {
+      organizationId: user.organizationId,
+      name: parsed.name,
+      email: parsed.email,
+      role: parsed.role,
+      title: parsed.title || null,
+      phone: parsed.phone || null,
+      passwordHash,
+    },
+  });
+
+  revalidatePath("/admin/users");
 }

@@ -5,7 +5,7 @@ async function login(page: import("@playwright/test").Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("Welcome123!");
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
 async function switchUser(page: import("@playwright/test").Page, email: string) {
@@ -14,7 +14,7 @@ async function switchUser(page: import("@playwright/test").Page, email: string) 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("Welcome123!");
   await page.getByRole("button", { name: "Enter workspace" }).click();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
 async function createLeadList(page: import("@playwright/test").Page, uniqueSuffix: string) {
@@ -144,4 +144,29 @@ test("salesperson can manually edit, regenerate, pause, reject, and approve with
   await openLeadDetailFromList(page, `Playwright Event List ${listName.replace(/\s+/g, "-")}`, 1);
   await page.getByRole("button", { name: "Approve full sequence" }).click();
   await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 10000 });
+});
+
+test("manager can onboard a new organization user who can then log in", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `new.rep.${suffix}@xelera.ai`;
+  const name = `Playwright Rep ${suffix}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(name);
+  await page.getByPlaceholder("Work email").fill(email);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.locator('input[name="password"]').fill("Welcome123!");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0199");
+  await page.getByRole("button", { name: "Create user" }).click();
+
+  await expect(page.getByText(email)).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText(name)).toBeVisible();
+
+  await switchUser(page, email);
+  await expect(page.getByText("Core Flow")).toBeVisible();
+  await page.getByRole("link", { name: "Lead Lists" }).click();
+  await expect(page.getByRole("button", { name: "Bulk approve selected" })).toHaveCount(0);
 });

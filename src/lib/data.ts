@@ -157,3 +157,21 @@ export async function getAssignableSalespeople(organizationId: string) {
     orderBy: { name: "asc" },
   });
 }
+
+export async function getOrganizationUsers(organizationId: string) {
+  return prisma.user.findMany({
+    where: {
+      organizationId,
+    },
+    include: {
+      team: true,
+      assignedLists: {
+        select: { id: true },
+      },
+      assignedLeads: {
+        select: { id: true },
+      },
+    },
+    orderBy: [{ role: "asc" }, { name: "asc" }],
+  });
+}
