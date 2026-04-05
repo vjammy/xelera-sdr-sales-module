@@ -157,6 +157,18 @@ export async function getProfile(userId: string, organizationId: string) {
   });
 }
 
+export async function getOrganizationUserByEmail(email: string, organizationId: string) {
+  return prisma.user.findFirst({
+    where: {
+      email,
+      organizationId,
+    },
+    include: {
+      team: true,
+    },
+  });
+}
+
 export async function getInviteDigestHistory(recipientEmail: string, organizationId: string) {
   const events = await prisma.auditEvent.findMany({
     where: {

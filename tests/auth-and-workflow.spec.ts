@@ -509,7 +509,7 @@ test("manager dashboard flags pending invites that have gone stale", async ({ pa
   await page.getByPlaceholder("Phone").fill("+1 646-555-0144");
   await page.getByRole("button", { name: "Create activation invite" }).click();
 
-  await expect(page.locator(`a[data-invite-email="${email}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${email}"]`).first()).toBeVisible();
   await makeLatestInviteStale(email);
   await page.goto("/");
 
@@ -577,6 +577,15 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(opsHistory).toBeVisible();
   await expect(opsHistory).toContainText("ava.manager@xelera.ai");
   await expect(opsHistory).toContainText(/manual|sent|failed|skipped/i);
+  await opsHistory.getByRole("link", { name: "ava.manager@xelera.ai" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
+  await expect(page.getByRole("heading", { name: /Recent invite hygiene deliveries for this recipient/i })).toBeVisible();
+  await expect(page.getByText("ava.manager@xelera.ai")).toBeVisible();
+  await expect(page.locator("[data-recipient-digest-history]")).toContainText(
+    /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
+  );
+  await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
+  await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
   await page.getByRole("button", { name: "Run digest now" }).click();
@@ -656,7 +665,7 @@ test("manager can limit invite digests to stale alerts only", async ({ page }) =
   await page.getByPlaceholder("Job title").fill("SDR");
   await page.getByPlaceholder("Phone").fill("+1 646-555-0122");
   await page.getByRole("button", { name: "Create activation invite" }).click();
-  await expect(page.locator(`a[data-invite-email="${staleEmail}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${staleEmail}"]`).first()).toBeVisible();
 
   await page.getByPlaceholder("Full name").fill(`Digest Expiring ${expiringSuffix}`);
   await page.getByPlaceholder("Work email").fill(expiringEmail);
@@ -664,7 +673,7 @@ test("manager can limit invite digests to stale alerts only", async ({ page }) =
   await page.getByPlaceholder("Job title").fill("SDR");
   await page.getByPlaceholder("Phone").fill("+1 646-555-0111");
   await page.getByRole("button", { name: "Create activation invite" }).click();
-  await expect(page.locator(`a[data-invite-email="${expiringEmail}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`).first()).toBeVisible();
 
   await makeLatestInviteStale(staleEmail);
   await makeLatestInviteExpireSoon(expiringEmail);

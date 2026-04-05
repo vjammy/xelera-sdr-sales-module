@@ -315,7 +315,14 @@ export default async function DigestOpsPage(props: {
                       <tbody className="divide-y divide-slate-100">
                         {entry.recipientDeliveries.map((delivery) => (
                           <tr key={delivery.id}>
-                            <td className="px-4 py-3 text-slate-700">{delivery.email}</td>
+                            <td className="px-4 py-3 text-slate-700">
+                              <Link
+                                href={`/admin/digests/recipient?email=${encodeURIComponent(delivery.email)}`}
+                                className="font-medium text-slate-900 underline decoration-slate-300 underline-offset-4 transition hover:text-slate-700 hover:decoration-slate-500"
+                              >
+                                {delivery.email}
+                              </Link>
+                            </td>
                             <td className="px-4 py-3 text-slate-700">
                               <div>{delivery.deliveryState.replaceAll("_", " ")}</div>
                               {getRetryOutcomeLabel({
