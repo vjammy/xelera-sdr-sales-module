@@ -294,6 +294,16 @@ export default async function Home() {
                     {item.title}
                   </Link>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                  {item.detailHref && item.detailLabel ? (
+                    <div className="mt-3">
+                      <Link
+                        href={item.detailHref}
+                        className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+                      >
+                        {item.detailLabel}
+                      </Link>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>

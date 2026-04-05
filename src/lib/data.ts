@@ -246,6 +246,8 @@ export async function getDashboardData(user: {
     description: string;
     href: string;
     outcomeHref: string;
+    detailLabel?: string;
+    detailHref?: string;
   }> = inviteActivity.map((event) => {
     const metadata =
       event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
@@ -274,6 +276,9 @@ export async function getDashboardData(user: {
     const alertCount = typeof metadata?.alertCount === "number" ? metadata.alertCount : 0;
     const recipients = Array.isArray(metadata?.recipients)
       ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
+      : [];
+    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+      ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
       : [];
     const recipientCount = recipients.length;
     const actionLabel =
@@ -312,6 +317,30 @@ export async function getDashboardData(user: {
           : event.action === "skipped"
             ? "/admin/digests?state=skipped"
             : `/admin/digests?state=${event.action}`,
+      ...(event.action === "manual" || event.action === "failed"
+        ? (() => {
+            const attentionRecipients = recipientDeliveries
+              .filter((delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed")
+              .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
+              .filter((email): email is string => Boolean(email));
+
+            if (attentionRecipients.length === 1) {
+              return {
+                detailLabel: "Open recipient",
+                detailHref: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
+              };
+            }
+
+            if (attentionRecipients.length > 1) {
+              return {
+                detailLabel: "Open retry slice",
+                detailHref: `/admin/digests?state=${event.action}`,
+              };
+            }
+
+            return {};
+          })()
+        : {}),
     };
   });
 

@@ -797,6 +797,14 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.locator("[data-digest-pagination]")).toBeVisible();
   await expect(page.getByRole("link", { name: "Newer runs" })).toBeVisible();
 
+  await page.goto("/");
+  const dashboardActivity = page.locator("[data-dashboard-invite-activity]");
+  await expect(dashboardActivity).toBeVisible();
+  await expect(dashboardActivity).toContainText(/Manual follow-up required|No action needed|Completed/);
+  await dashboardActivity.getByRole("link", { name: "Open retry slice" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\?state=manual/);
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText("manual");
+
   await page.goto("/admin/digests");
   const presets = page.locator("[data-digest-presets]");
   await expect(presets).toBeVisible();
