@@ -5,101 +5,16 @@ import { ShareLinkPanel } from "@/components/share-link-panel";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
+import {
+  buildDigestExportHref,
+  buildDigestHref,
+  filterDigestHistory,
+  normalizeFilterState,
+  normalizePageNumber,
+  type DigestFilterState,
+  paginateDigestHistory,
+} from "@/lib/invite-digest-view";
 import { canManageUsers } from "@/lib/permissions";
-
-type DigestFilterState = "all" | "sent" | "manual" | "failed" | "skipped" | "retry";
-const DIGESTS_PER_PAGE = 6;
-
-function normalizeFilterState(value?: string): DigestFilterState {
-  if (value === "sent" || value === "manual" || value === "failed" || value === "skipped" || value === "retry") {
-    return value;
-  }
-
-  return "all";
-}
-
-function normalizePageNumber(value?: string) {
-  const parsed = Number.parseInt(value ?? "1", 10);
-
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return 1;
-  }
-
-  return parsed;
-}
-
-function matchesRecipientFilter(
-  query: string,
-  entry: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>[number],
-) {
-  if (!query) {
-    return true;
-  }
-
-  const normalizedQuery = query.toLowerCase();
-
-  return (
-    entry.recipients.some((recipient) => recipient.toLowerCase().includes(normalizedQuery)) ||
-    entry.requestedRecipients.some((recipient) => recipient.toLowerCase().includes(normalizedQuery)) ||
-    entry.recipientDeliveries.some((delivery) => delivery.email.toLowerCase().includes(normalizedQuery))
-  );
-}
-
-function filterDigestHistory(
-  history: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>,
-  state: DigestFilterState,
-  recipientQuery: string,
-) {
-  return history.filter((entry) => {
-    const matchesState =
-      state === "all"
-        ? true
-        : state === "retry"
-          ? entry.isTargetedRetry
-          : entry.action === state;
-
-    return matchesState && matchesRecipientFilter(recipientQuery, entry);
-  });
-}
-
-function paginateDigestHistory(
-  history: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>,
-  page: number,
-) {
-  const totalPages = Math.max(1, Math.ceil(history.length / DIGESTS_PER_PAGE));
-  const currentPage = Math.min(page, totalPages);
-  const startIndex = (currentPage - 1) * DIGESTS_PER_PAGE;
-
-  return {
-    currentPage,
-    totalPages,
-    paginatedHistory: history.slice(startIndex, startIndex + DIGESTS_PER_PAGE),
-  };
-}
-
-function buildDigestHref(args: {
-  page: number;
-  state: DigestFilterState;
-  recipientQuery: string;
-}) {
-  const params = new URLSearchParams();
-
-  if (args.page > 1) {
-    params.set("page", String(args.page));
-  }
-
-  if (args.state !== "all") {
-    params.set("state", args.state);
-  }
-
-  if (args.recipientQuery) {
-    params.set("recipient", args.recipientQuery);
-  }
-
-  const query = params.toString();
-
-  return query ? `/admin/digests?${query}` : "/admin/digests";
-}
 
 function isPresetActive(args: {
   presetState: DigestFilterState;
@@ -153,6 +68,11 @@ export default async function DigestOpsPage(props: {
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const currentViewPath = buildDigestHref({
+    page: currentPage,
+    state: filterState,
+    recipientQuery,
+  });
+  const exportHref = buildDigestExportHref({
     page: currentPage,
     state: filterState,
     recipientQuery,
@@ -292,6 +212,15 @@ export default async function DigestOpsPage(props: {
               description="Copy the current filters and page into a direct link so another manager lands on the same digest investigation view."
               url={shareUrl}
             />
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Link
+              href={exportHref}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+              data-export-digest-view
+            >
+              Export current view CSV
+            </Link>
           </div>
           {filterState !== "all" || recipientQuery ? (
             <p className="mt-4 text-sm text-slate-600" data-digest-filter-summary>

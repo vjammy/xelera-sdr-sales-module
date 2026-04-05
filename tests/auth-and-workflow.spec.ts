@@ -602,6 +602,15 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.locator("[data-share-view-url]")).toHaveValue(
     /\/admin\/digests\?state=retry&recipient=ava\.manager%40xelera\.ai$/,
   );
+  const exportHref = await page.locator("[data-export-digest-view]").getAttribute("href");
+  expect(exportHref).toMatch(/\/admin\/digests\/export\?state=retry&recipient=ava\.manager%40xelera\.ai/);
+  const exportResponse = await page.request.get(exportHref ?? "");
+  expect(exportResponse.ok()).toBeTruthy();
+  expect(exportResponse.headers()["content-type"]).toContain("text/csv");
+  const exportBody = await exportResponse.text();
+  expect(exportBody).toContain("run_id,run_created_at,run_action");
+  expect(exportBody).toContain("ava.manager@xelera.ai");
+  expect(exportBody).toContain("retry");
 
   for (let index = 0; index < 4; index += 1) {
     const digestCountBeforeExtraRun = await countInviteDigestEvents();
