@@ -612,6 +612,14 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.locator("[data-digest-page-summary]")).toContainText("Page 2");
   await expect(page.locator("[data-digest-pagination]")).toBeVisible();
   await expect(page.getByRole("link", { name: "Newer runs" })).toBeVisible();
+
+  await page.goto("/admin/digests");
+  const presets = page.locator("[data-digest-presets]");
+  await expect(presets).toBeVisible();
+  await page.getByRole("link", { name: "Targeted retries" }).click();
+  await expect(page).toHaveURL(/state=retry/);
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText("targeted retries");
+  await expect(page.locator("[data-digest-ops-history]")).toContainText("Retry attempted");
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

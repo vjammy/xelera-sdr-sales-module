@@ -100,6 +100,15 @@ function buildDigestHref(args: {
   return query ? `/admin/digests?${query}` : "/admin/digests";
 }
 
+function isPresetActive(args: {
+  presetState: DigestFilterState;
+  presetRecipientQuery: string;
+  activeState: DigestFilterState;
+  activeRecipientQuery: string;
+}) {
+  return args.presetState === args.activeState && args.presetRecipientQuery === args.activeRecipientQuery;
+}
+
 function getRetryOutcomeLabel(args: {
   deliveryState: string;
   isTargetedRetry: boolean;
@@ -139,6 +148,33 @@ export default async function DigestOpsPage(props: {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const presets = [
+    {
+      label: "All runs",
+      state: "all" as DigestFilterState,
+      recipientQuery: "",
+    },
+    {
+      label: "Targeted retries",
+      state: "retry" as DigestFilterState,
+      recipientQuery: "",
+    },
+    {
+      label: "Failed deliveries",
+      state: "failed" as DigestFilterState,
+      recipientQuery: "",
+    },
+    {
+      label: "Manual fallback",
+      state: "manual" as DigestFilterState,
+      recipientQuery: "",
+    },
+    {
+      label: "My deliveries",
+      state: "all" as DigestFilterState,
+      recipientQuery: user.email,
+    },
+  ];
 
   return (
     <WorkspaceShell user={user}>
@@ -211,6 +247,35 @@ export default async function DigestOpsPage(props: {
               Clear
             </Link>
           </form>
+          <div className="mt-4 flex flex-wrap items-center gap-2" data-digest-presets>
+            {presets.map((preset) => {
+              const active = isPresetActive({
+                presetState: preset.state,
+                presetRecipientQuery: preset.recipientQuery,
+                activeState: filterState,
+                activeRecipientQuery: recipientQuery,
+              });
+
+              return (
+                <Link
+                  key={`${preset.label}-${preset.state}-${preset.recipientQuery}`}
+                  href={buildDigestHref({
+                    page: 1,
+                    state: preset.state,
+                    recipientQuery: preset.recipientQuery,
+                  })}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    active
+                      ? "bg-slate-950 text-white"
+                      : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                  }`}
+                >
+                  {preset.label}
+                </Link>
+              );
+            })}
+          </div>
           {filterState !== "all" || recipientQuery ? (
             <p className="mt-4 text-sm text-slate-600" data-digest-filter-summary>
               Showing {filteredHistory.length} run{filteredHistory.length === 1 ? "" : "s"}
