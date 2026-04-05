@@ -3,6 +3,17 @@ import { canViewAllWork } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { expireInviteIfNeeded } from "@/lib/invites";
 
+type InviteDigestRecipientIssueState = {
+  recentAttentionRuns: number;
+  manualRunCount: number;
+  failedRunCount: number;
+  currentAttentionStreak: number;
+  reviewState: "reviewed" | "active_issue" | "none";
+  reviewActorName: string | null;
+  reviewActorEmail: string | null;
+  reviewCreatedAt: Date | null;
+};
+
 function getRecipientIssueStateMap(events: Array<{
   id: string;
   createdAt: Date;
@@ -113,7 +124,7 @@ async function getInviteDigestRecipientIssueState(organizationId: string) {
     }
   }
 
-  return new Map(
+  return new Map<string, InviteDigestRecipientIssueState>(
     Array.from(digestHistoryByRecipient.entries()).map(([email, history]) => {
       const recentAttentionRuns = history.filter(
         (entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed",
@@ -177,6 +188,28 @@ function formatRecipientAttentionCounts(issueState: {
   }
 
   return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
+function getAttentionRecipientPriority(args: {
+  email: string;
+  recipientDeliveries: Array<Record<string, unknown>>;
+  inviteDigestRecipientIssueState: Map<string, InviteDigestRecipientIssueState>;
+}) {
+  const matchingDelivery = args.recipientDeliveries.find((delivery) => delivery.email === args.email);
+  const deliveryState = typeof matchingDelivery?.deliveryState === "string" ? matchingDelivery.deliveryState : "skipped";
+  const issueState = args.inviteDigestRecipientIssueState.get(args.email);
+  const reviewPriority =
+    issueState?.reviewState === "active_issue" ? 0 : issueState?.reviewState === "reviewed" ? 1 : 2;
+  const deliveryPriority = deliveryState === "failed" ? 0 : deliveryState === "manual" ? 1 : 2;
+
+  return {
+    reviewPriority,
+    deliveryPriority,
+    attentionRuns: -(issueState?.recentAttentionRuns ?? 0),
+    failedRuns: -(issueState?.failedRunCount ?? 0),
+    manualRuns: -(issueState?.manualRunCount ?? 0),
+    email: args.email,
+  };
 }
 
 export async function getDashboardData(user: {
@@ -390,15 +423,36 @@ export async function getDashboardData(user: {
             }
 
             if (attentionRecipients.length > 1) {
-              const reviewedRecipients = attentionRecipients.filter(
+              const sortedAttentionRecipients = [...attentionRecipients].sort((left, right) => {
+                const leftPriority = getAttentionRecipientPriority({
+                  email: left,
+                  recipientDeliveries,
+                  inviteDigestRecipientIssueState,
+                });
+                const rightPriority = getAttentionRecipientPriority({
+                  email: right,
+                  recipientDeliveries,
+                  inviteDigestRecipientIssueState,
+                });
+
+                return (
+                  leftPriority.reviewPriority - rightPriority.reviewPriority ||
+                  leftPriority.deliveryPriority - rightPriority.deliveryPriority ||
+                  leftPriority.attentionRuns - rightPriority.attentionRuns ||
+                  leftPriority.failedRuns - rightPriority.failedRuns ||
+                  leftPriority.manualRuns - rightPriority.manualRuns ||
+                  leftPriority.email.localeCompare(rightPriority.email)
+                );
+              });
+              const reviewedRecipients = sortedAttentionRecipients.filter(
                 (email) => inviteDigestRecipientIssueState.get(email)?.reviewState === "reviewed",
               );
-              const activeRecipients = attentionRecipients.filter(
+              const activeRecipients = sortedAttentionRecipients.filter(
                 (email) => inviteDigestRecipientIssueState.get(email)?.reviewState === "active_issue",
               );
               const summaryParts = [
-                `Affected recipients: ${attentionRecipients.slice(0, 2).join(", ")}${
-                  attentionRecipients.length > 2 ? ` +${attentionRecipients.length - 2} more` : ""
+                `Affected recipients: ${sortedAttentionRecipients.slice(0, 2).join(", ")}${
+                  sortedAttentionRecipients.length > 2 ? ` +${sortedAttentionRecipients.length - 2} more` : ""
                 }`,
               ];
 

@@ -85,6 +85,56 @@ async function createPendingInviteForTest(args: {
   });
 }
 
+async function createInviteDigestEventForTest(args: {
+  action?: "manual" | "failed" | "sent" | "skipped";
+  recipients: Array<{
+    email: string;
+    deliveryState: "manual" | "failed" | "sent" | "skipped";
+    alertCount?: number;
+    staleCount?: number;
+    expiringSoonCount?: number;
+    preference?: string;
+  }>;
+}) {
+  const manager = await db.user.findUnique({
+    where: { email: "ava.manager@xelera.ai" },
+    select: {
+      id: true,
+      organizationId: true,
+    },
+  });
+
+  if (!manager) {
+    throw new Error("Expected seeded manager account for digest setup.");
+  }
+
+  const recipients = args.recipients.map((recipient) => recipient.email);
+
+  return db.auditEvent.create({
+    data: {
+      organizationId: manager.organizationId,
+      actorId: manager.id,
+      entityType: "invite_hygiene_digest",
+      entityId: `playwright-digest-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      action: args.action ?? "manual",
+      metadata: {
+        alertCount: args.recipients.reduce((total, recipient) => total + (recipient.alertCount ?? 1), 0),
+        staleCount: args.recipients.reduce((total, recipient) => total + (recipient.staleCount ?? 0), 0),
+        expiringSoonCount: args.recipients.reduce((total, recipient) => total + (recipient.expiringSoonCount ?? 0), 0),
+        recipients,
+        recipientDeliveries: args.recipients.map((recipient) => ({
+          email: recipient.email,
+          deliveryState: recipient.deliveryState,
+          alertCount: recipient.alertCount ?? 1,
+          staleCount: recipient.staleCount ?? 0,
+          expiringSoonCount: recipient.expiringSoonCount ?? 0,
+          preference: recipient.preference ?? "all_alerts",
+        })),
+      },
+    },
+  });
+}
+
 async function getLatestPendingInvite(email: string) {
   return db.userInvite.findFirst({
     where: {
@@ -650,6 +700,8 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   const suffix = Date.now();
   const email = `digest.rep.${suffix}@xelera.ai`;
   const name = `Digest Rep ${suffix}`;
+  const failedPriorityEmail = `priority.failed.${suffix}@xelera.ai`;
+  const manualPriorityEmail = `priority.manual.${suffix}@xelera.ai`;
 
   await login(page, "ava.manager@xelera.ai");
   await page.goto("/admin/users");
@@ -782,6 +834,58 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
     /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
   );
+  await createPendingInviteForTest({
+    email: failedPriorityEmail,
+    name: `Priority Failed ${suffix}`,
+    phone: "+1 646-555-0101",
+  });
+  await createPendingInviteForTest({
+    email: manualPriorityEmail,
+    name: `Priority Manual ${suffix}`,
+    phone: "+1 646-555-0102",
+  });
+  await createInviteDigestEventForTest({
+    action: "failed",
+    recipients: [
+      {
+        email: failedPriorityEmail,
+        deliveryState: "failed",
+        alertCount: 2,
+      },
+      {
+        email: manualPriorityEmail,
+        deliveryState: "manual",
+        alertCount: 1,
+      },
+    ],
+  });
+  await createInviteDigestEventForTest({
+    action: "failed",
+    recipients: [
+      {
+        email: failedPriorityEmail,
+        deliveryState: "failed",
+        alertCount: 2,
+      },
+      {
+        email: manualPriorityEmail,
+        deliveryState: "manual",
+        alertCount: 1,
+      },
+    ],
+  });
+  await page.goto("/");
+  const priorityActivityCard = page
+    .locator("[data-dashboard-invite-activity] article")
+    .filter({ hasText: failedPriorityEmail })
+    .first();
+  await expect(priorityActivityCard).toContainText(
+    new RegExp(`Affected recipients: ${failedPriorityEmail}, ${manualPriorityEmail}`),
+  );
+  await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${failedPriorityEmail}`) })).toBeVisible();
+  await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${manualPriorityEmail}`) })).toBeVisible();
+  await expect(priorityActivityCard.getByRole("link", { name: /Needs review:/ }).nth(0)).toContainText(failedPriorityEmail);
+  await expect(priorityActivityCard.getByRole("link", { name: /Needs review:/ }).nth(1)).toContainText(manualPriorityEmail);
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
   await page.goto("/admin/digests?issue=active_issue");
