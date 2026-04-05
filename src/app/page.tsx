@@ -2,13 +2,23 @@ import Link from "next/link";
 import { MetricCard } from "@/components/metric-card";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
-import { formatDate } from "@/lib/format";
 import { requireUser } from "@/lib/auth";
 import { getDashboardData } from "@/lib/data";
+import { formatDate } from "@/lib/format";
+import { canManageUsers } from "@/lib/permissions";
+
+function formatInviteAge(date: Date) {
+  const hours = Math.max(1, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60)));
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+
+  return `${Math.floor(hours / 24)}d`;
+}
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics } = await getDashboardData(user);
+  const { leadLists, metrics, staleInviteAlerts } = await getDashboardData(user);
 
   return (
     <WorkspaceShell user={user}>
@@ -48,6 +58,59 @@ export default async function Home() {
       </section>
 
       <section className="mt-8 rounded-[32px] border border-white/70 bg-white/85 p-6 shadow-lg shadow-slate-200/40">
+        {canManageUsers(user.role) && staleInviteAlerts.length ? (
+          <div
+            data-stale-invite-callout
+            className="mb-6 rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-5"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-amber-700">Invite Attention</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-amber-950">
+                  Pending seats have gone untouched for several days
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-amber-900">
+                  These invites have not been retried or rotated recently. Review them before the activation links
+                  become urgent or expire.
+                </p>
+              </div>
+              <Link
+                href="/admin/users"
+                className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Open user onboarding
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              {staleInviteAlerts.map((invite) => {
+                const lastTouchedAt = invite.lastDeliveryAttemptAt ?? invite.createdAt;
+                return (
+                  <article
+                    key={invite.id}
+                    data-stale-invite-email={invite.user.email}
+                    className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold text-slate-950">{invite.user.name}</p>
+                        <p className="mt-1 text-sm text-slate-600">{invite.user.email}</p>
+                      </div>
+                      <StatusPill value="uploaded" />
+                    </div>
+                    <p className="mt-3 text-sm leading-7 text-slate-700">
+                      Pending for {formatInviteAge(invite.createdAt)}.
+                      {" "}
+                      Last touch {formatInviteAge(lastTouchedAt)} ago.
+                    </p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                      Expires {formatDate(invite.expiresAt)}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Lists</p>

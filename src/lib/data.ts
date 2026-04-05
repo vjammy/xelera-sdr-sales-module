@@ -1,6 +1,6 @@
 import { canViewAllWork } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { expireInviteIfNeeded } from "@/lib/invites";
+import { expireInviteIfNeeded, isInviteStale } from "@/lib/invites";
 
 export async function getDashboardData(user: {
   id: string;
@@ -39,6 +39,36 @@ export async function getDashboardData(user: {
     }),
   ]);
 
+  const stalePendingInvites =
+    user.role === "sales_manager" || user.role === "admin_operator"
+      ? await prisma.userInvite.findMany({
+          where: {
+            organizationId: user.organizationId,
+            status: "pending",
+          },
+          orderBy: [{ lastDeliveryAttemptAt: "asc" }, { createdAt: "asc" }],
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+          },
+        })
+      : [];
+
+  const staleInviteAlerts = stalePendingInvites
+    .filter((invite) =>
+      isInviteStale({
+        createdAt: invite.createdAt,
+        lastDeliveryAttemptAt: invite.lastDeliveryAttemptAt,
+      }),
+    )
+    .slice(0, 5);
+
   return {
     leadLists,
     metrics: {
@@ -49,6 +79,7 @@ export async function getDashboardData(user: {
       researchCompleteCount: metrics[4],
       activeProductCount: products,
     },
+    staleInviteAlerts,
   };
 }
 
