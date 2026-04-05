@@ -23,6 +23,68 @@ async function login(page: Page, email: string, password = "Welcome123!") {
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
+async function retry<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (index < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function createPendingInviteForTest(args: {
+  email: string;
+  name: string;
+  title?: string;
+  phone?: string;
+}) {
+  const manager = await db.user.findUnique({
+    where: { email: "ava.manager@xelera.ai" },
+    select: {
+      id: true,
+      organizationId: true,
+      teamId: true,
+    },
+  });
+
+  if (!manager) {
+    throw new Error("Expected seeded manager account for invite setup.");
+  }
+
+  const user = await db.user.create({
+    data: {
+      organizationId: manager.organizationId,
+      teamId: manager.teamId,
+      name: args.name,
+      email: args.email,
+      role: "salesperson",
+      title: args.title ?? "SDR",
+      phone: args.phone ?? "+1 646-555-0190",
+    },
+  });
+
+  return db.userInvite.create({
+    data: {
+      organizationId: manager.organizationId,
+      userId: user.id,
+      invitedById: manager.id,
+      token: `test-invite-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      status: "pending",
+      deliveryState: "manual",
+      lastDeliveryAttemptAt: new Date(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+    },
+  });
+}
+
 async function switchUser(page: Page, email: string, password = "Welcome123!") {
   const signOutButton = page.getByRole("button", { name: "Sign out" });
   if (await signOutButton.isVisible().catch(() => false)) {
@@ -117,12 +179,14 @@ async function makeLatestInviteExpireSoon(email: string) {
     throw new Error(`Expected a pending invite for ${email}.`);
   }
 
-  await db.userInvite.update({
-    where: { id: invite.id },
-    data: {
-      expiresAt: new Date(Date.now() + 1000 * 60 * 30),
-    },
-  });
+  await retry(() =>
+    db.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        expiresAt: new Date(Date.now() + 1000 * 60 * 30),
+      },
+    }),
+  );
 }
 
 async function makeLatestInviteStale(email: string) {
@@ -144,13 +208,15 @@ async function makeLatestInviteStale(email: string) {
 
   const staleTimestamp = new Date(Date.now() - 1000 * 60 * 60 * 24 * 4);
 
-  await db.userInvite.update({
-    where: { id: invite.id },
-    data: {
-      createdAt: staleTimestamp,
-      lastDeliveryAttemptAt: staleTimestamp,
-    },
-  });
+  await retry(() =>
+    db.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        createdAt: staleTimestamp,
+        lastDeliveryAttemptAt: staleTimestamp,
+      },
+    }),
+  );
 }
 
 test("sales manager can log in and see dashboard plus bulk approval controls", async ({ page }) => {
@@ -490,30 +556,47 @@ test("manager can proactively rotate an invite that is close to expiry", async (
   await expect(page.getByText("Core Flow")).toBeVisible();
 });
 
-test("manager dashboard flags pending invites that have gone stale", async ({ page }) => {
+test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", async ({ page }) => {
+  test.setTimeout(90000);
   const suffix = Date.now();
-  const email = `stale.rep.${suffix}@xelera.ai`;
-  const name = `Stale Rep ${suffix}`;
+  const staleEmail = `stale.rep.${suffix}@xelera.ai`;
+  const staleName = `Stale Rep ${suffix}`;
+  const expiringEmail = `expiring.rep.${suffix}@xelera.ai`;
+  const expiringName = `Expiring Rep ${suffix}`;
 
   await login(page, "ava.manager@xelera.ai");
-  await page.goto("/admin/users");
+  await createPendingInviteForTest({
+    email: staleEmail,
+    name: staleName,
+    phone: "+1 646-555-0144",
+  });
+  await createPendingInviteForTest({
+    email: expiringEmail,
+    name: expiringName,
+    phone: "+1 646-555-0145",
+  });
 
-  await page.getByPlaceholder("Full name").fill(name);
-  await page.getByPlaceholder("Work email").fill(email);
-  await page.locator('select[name="role"]').selectOption("salesperson");
-  await page.getByPlaceholder("Job title").fill("SDR");
-  await page.getByPlaceholder("Phone").fill("+1 646-555-0144");
-  await page.getByRole("button", { name: "Create activation invite" }).click();
-
-  await expect(page.locator(`[data-user-email="${email}"]`).first()).toBeVisible({ timeout: 10000 });
-  await makeLatestInviteStale(email);
+  await makeLatestInviteStale(staleEmail);
+  await makeLatestInviteExpireSoon(expiringEmail);
   await page.goto("/");
 
+  const hygieneSummary = page.locator("[data-dashboard-invite-hygiene-summary]");
+  await expect(hygieneSummary).toBeVisible();
+  await expect(hygieneSummary).toContainText("Stale Pending Invites");
+  await expect(hygieneSummary).toContainText("Expiring Soon Invites");
+  await hygieneSummary.getByRole("link", { name: /Expiring Soon Invites/i }).click();
+  await expect(page).toHaveURL(/\/admin\/users\?attention=expiring_soon/);
+  await expect(page.locator("[data-user-filter-summary]")).toContainText("expiring soon invites");
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`)).toBeVisible();
+  await expect(page.locator(`[data-user-email="${staleEmail}"]`)).toHaveCount(0);
+
+  await page.goto("/");
   const callout = page.locator("[data-stale-invite-callout]");
   await expect(callout).toBeVisible();
   await expect(callout).toContainText("Pending seats have gone untouched for several days");
   await expect(callout).toContainText("Open user onboarding");
-  await expect(page.getByRole("link", { name: "Open user onboarding" })).toBeVisible();
+  await callout.getByRole("link", { name: "Open user onboarding" }).click();
+  await expect(page).toHaveURL(/\/admin\/users$/);
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

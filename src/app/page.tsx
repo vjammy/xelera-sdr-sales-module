@@ -18,7 +18,8 @@ function formatInviteAge(date: Date) {
 
 export default async function Home() {
   const user = await requireUser();
-  const { leadLists, metrics, staleInviteAlerts, inviteIssueSummary } = await getDashboardData(user);
+  const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary } =
+    await getDashboardData(user);
 
   return (
     <WorkspaceShell user={user}>
@@ -58,6 +59,54 @@ export default async function Home() {
       </section>
 
       <section className="mt-8 rounded-[32px] border border-white/70 bg-white/85 p-6 shadow-lg shadow-slate-200/40">
+        {canManageUsers(user.role) &&
+        (staleInviteAlerts.length > 0 || expiringSoonInviteAlerts.length > 0) ? (
+          <div
+            data-dashboard-invite-hygiene-summary
+            className="mb-6 rounded-[28px] border border-slate-200 bg-slate-50/90 px-5 py-5"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Invite Hygiene</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                  Aging activation links need attention before onboarding slips
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                  Spot stale pending invites and links that are close to expiring, then jump straight into the filtered
+                  onboarding queue to retry, rotate, or revoke them.
+                </p>
+              </div>
+              <Link
+                href="/admin/users"
+                className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Open user onboarding
+              </Link>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              <Link
+                href="/admin/users?attention=stale"
+                className="rounded-[24px] border border-amber-200 bg-white/90 px-4 py-4 transition hover:border-amber-300 hover:bg-amber-50/70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">Stale Pending Invites</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{staleInviteAlerts.length}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Pending seats that have gone untouched for several days and should be reviewed now.
+                </p>
+              </Link>
+              <Link
+                href="/admin/users?attention=expiring_soon"
+                className="rounded-[24px] border border-orange-200 bg-white/90 px-4 py-4 transition hover:border-orange-300 hover:bg-orange-50/70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-900">Expiring Soon Invites</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-950">{expiringSoonInviteAlerts.length}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Pending seats with little time left on their activation links, ready for fast rotation.
+                </p>
+              </Link>
+            </div>
+          </div>
+        ) : null}
         {canManageUsers(user.role) && staleInviteAlerts.length ? (
           <div
             data-stale-invite-callout

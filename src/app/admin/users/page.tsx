@@ -12,7 +12,7 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationUsers } from "@/lib/data";
 import { getInviteDeliveryConfig } from "@/lib/invite-config";
-import { expireStaleInvitesForOrganization, isInviteExpiringSoon } from "@/lib/invites";
+import { expireStaleInvitesForOrganization, isInviteExpiringSoon, isInviteStale } from "@/lib/invites";
 import { canManageUsers } from "@/lib/permissions";
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
@@ -21,16 +21,42 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: "admin_operator", label: "Admin Operator" },
 ];
 
+type InviteAttentionFilter = "all" | "stale" | "expiring_soon";
+
+function normalizeInviteAttentionFilter(value?: string): InviteAttentionFilter {
+  if (value === "stale" || value === "expiring_soon") {
+    return value;
+  }
+
+  return "all";
+}
+
 export default async function UsersPage(props: {
-  searchParams?: Promise<{ email?: string }>;
+  searchParams?: Promise<{ email?: string; attention?: string }>;
 }) {
   const user = await requireUser();
   await expireStaleInvitesForOrganization(user.organizationId);
   const searchParams = (await props.searchParams) ?? {};
   const emailFilter = searchParams.email?.trim().toLowerCase() ?? "";
-  const users = (await getOrganizationUsers(user.organizationId)).filter((member) =>
-    emailFilter ? member.email.toLowerCase().includes(emailFilter) : true,
-  );
+  const attentionFilter = normalizeInviteAttentionFilter(searchParams.attention);
+  const users = (await getOrganizationUsers(user.organizationId)).filter((member) => {
+    const matchesEmail = emailFilter ? member.email.toLowerCase().includes(emailFilter) : true;
+    const pendingInvite = member.invites.find((invite) => invite.status === "pending");
+    const matchesAttention =
+      attentionFilter === "all"
+        ? true
+        : attentionFilter === "stale"
+          ? Boolean(
+              pendingInvite &&
+                isInviteStale({
+                  createdAt: pendingInvite.createdAt,
+                  lastDeliveryAttemptAt: pendingInvite.lastDeliveryAttemptAt,
+                }),
+            )
+          : Boolean(pendingInvite && isInviteExpiringSoon(pendingInvite.expiresAt));
+
+    return matchesEmail && matchesAttention;
+  });
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -77,6 +103,18 @@ export default async function UsersPage(props: {
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
               />
             </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Invite attention
+              <select
+                name="attention"
+                defaultValue={attentionFilter}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+              >
+                <option value="all">All seats</option>
+                <option value="stale">Stale pending invites</option>
+                <option value="expiring_soon">Expiring soon</option>
+              </select>
+            </label>
             <button
               type="submit"
               className="rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
@@ -90,9 +128,13 @@ export default async function UsersPage(props: {
               Clear
             </Link>
           </form>
-          {emailFilter ? (
+          {emailFilter || attentionFilter !== "all" ? (
             <p className="mt-4 text-sm text-slate-600" data-user-filter-summary>
-              Showing {users.length} seat{users.length === 1 ? "" : "s"} matching &quot;{emailFilter}&quot;.
+              Showing {users.length} seat{users.length === 1 ? "" : "s"}
+              {attentionFilter !== "all"
+                ? ` with ${attentionFilter === "stale" ? "stale pending invites" : "expiring soon invites"}`
+                : ""}
+              {emailFilter ? `${attentionFilter !== "all" ? " matching" : " matching"} "${emailFilter}"` : ""}.
             </p>
           ) : null}
 
