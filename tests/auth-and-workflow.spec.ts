@@ -717,6 +717,12 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(reviewedRecipientActivity).toContainText(
     /Affected recipients: .*ava\.manager@xelera\.ai.* - Reviewed: ava\.manager@xelera\.ai/,
   );
+  await reviewedRecipientActivity.getByRole("link", { name: "Reviewed: ava.manager@xelera.ai" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-recipient-reviewed-banner]")).toContainText("Reviewed after repeated issues");
+  await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
+  await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
+  await page.goto("/");
   await reviewedRecipientActivity.getByRole("link", { name: "Open retry slice" }).first().click();
   await expect(page).toHaveURL(/\/admin\/digests\?state=manual/);
   await expect(page.locator("[data-digest-ops-history]")).toContainText("Reviewed issue");
@@ -759,6 +765,10 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(recipientActivity).toContainText(
     /Affected recipient: ava\.manager@xelera\.ai - (Manual fallback|Delivery failed) - Needs review/,
   );
+  await recipientActivity.getByRole("link", { name: "Needs review: ava.manager@xelera.ai" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
+  await page.goto("/");
   await recipientActivity.getByRole("link", { name: "Open affected recipient" }).first().click();
   await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(

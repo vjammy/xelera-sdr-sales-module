@@ -295,7 +295,22 @@ export default async function Home() {
                   </Link>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
                   {item.recipientSummary ? (
-                    <p className="mt-2 text-sm font-medium text-slate-700">{item.recipientSummary}</p>
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm font-medium text-slate-700">{item.recipientSummary}</p>
+                      {item.recipientLinks?.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {item.recipientLinks.map((recipientLink) => (
+                            <Link
+                              key={`${item.id}-${recipientLink.label}`}
+                              href={recipientLink.href}
+                              className="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white hover:text-slate-950"
+                            >
+                              {recipientLink.label}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   {item.detailHref && item.detailLabel ? (
                     <div className="mt-3">

@@ -249,6 +249,10 @@ export async function getDashboardData(user: {
     detailLabel?: string;
     detailHref?: string;
     recipientSummary?: string;
+    recipientLinks?: Array<{
+      label: string;
+      href: string;
+    }>;
   }> = inviteActivity.map((event) => {
     const metadata =
       event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
@@ -351,6 +355,14 @@ export async function getDashboardData(user: {
                 recipientSummary: `Affected recipient: ${attentionRecipients[0]} - ${deliveryLabel}${
                   reviewLabel ? ` - ${reviewLabel}` : ""
                 }`,
+                recipientLinks: reviewLabel
+                  ? [
+                      {
+                        label: `${reviewLabel}: ${attentionRecipients[0]}`,
+                        href: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
+                      },
+                    ]
+                  : undefined,
               };
             }
 
@@ -379,10 +391,22 @@ export async function getDashboardData(user: {
                 summaryParts.push(`${activeRecipients.length} need review`);
               }
 
+              const recipientLinks = [
+                ...reviewedRecipients.slice(0, 2).map((email) => ({
+                  label: `Reviewed: ${email}`,
+                  href: `/admin/digests/recipient?email=${encodeURIComponent(email)}`,
+                })),
+                ...activeRecipients.slice(0, 2).map((email) => ({
+                  label: `Needs review: ${email}`,
+                  href: `/admin/digests/recipient?email=${encodeURIComponent(email)}`,
+                })),
+              ];
+
               return {
                 detailLabel: "Open retry slice",
                 detailHref: `/admin/digests?state=${event.action}`,
                 recipientSummary: summaryParts.join(" - "),
+                recipientLinks: recipientLinks.length ? recipientLinks : undefined,
               };
             }
 
