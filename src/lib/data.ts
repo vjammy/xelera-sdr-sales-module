@@ -331,17 +331,26 @@ export async function getDashboardData(user: {
                   (delivery.deliveryState === "manual" || delivery.deliveryState === "failed") &&
                   delivery.email === attentionRecipients[0],
               );
+              const reviewState = inviteDigestRecipientIssueState.get(attentionRecipients[0])?.reviewState ?? "none";
               const deliveryLabel =
                 matchingDelivery?.deliveryState === "failed"
                   ? "Delivery failed"
                   : matchingDelivery?.deliveryState === "manual"
                     ? "Manual fallback"
                     : "Needs attention";
+              const reviewLabel =
+                reviewState === "reviewed"
+                  ? "Reviewed"
+                  : reviewState === "active_issue"
+                    ? "Needs review"
+                    : null;
 
               return {
                 detailLabel: "Open affected recipient",
                 detailHref: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
-                recipientSummary: `Affected recipient: ${attentionRecipients[0]} - ${deliveryLabel}`,
+                recipientSummary: `Affected recipient: ${attentionRecipients[0]} - ${deliveryLabel}${
+                  reviewLabel ? ` - ${reviewLabel}` : ""
+                }`,
               };
             }
 
