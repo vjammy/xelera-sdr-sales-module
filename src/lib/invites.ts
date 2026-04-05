@@ -1,5 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
+export const INVITE_EXPIRING_SOON_WINDOW_MS = 1000 * 60 * 60 * 48;
+
+export function isInviteExpiringSoon(expiresAt: Date, now = new Date()) {
+  const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+  return timeUntilExpiry > 0 && timeUntilExpiry <= INVITE_EXPIRING_SOON_WINDOW_MS;
+}
+
 async function markInviteExpired(args: {
   inviteId: string;
   organizationId: string;

@@ -199,6 +199,88 @@ async function createInviteForExistingUser(args: {
   });
 }
 
+async function rotatePendingInvite(args: {
+  inviteId: string;
+  organizationId: string;
+  actorId: string;
+  actorName: string;
+  actorEmail: string;
+}) {
+  const invite = await prisma.userInvite.findUnique({
+    where: { id: args.inviteId },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!invite || invite.organizationId !== args.organizationId || invite.status !== "pending") {
+    throw new Error("This invite is no longer eligible for rotation.");
+  }
+
+  const expired = await expireInviteIfNeeded({
+    inviteId: invite.id,
+    organizationId: invite.organizationId,
+    email: invite.user.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  });
+
+  if (expired) {
+    throw new Error("This invite already expired. Refresh and issue a replacement invite.");
+  }
+
+  if (invite.user.passwordHash) {
+    throw new Error("That user has already activated their seat.");
+  }
+
+  const replacementToken = crypto.randomBytes(24).toString("hex");
+  const replacementExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+
+  const replacementInvite = await prisma.$transaction(async (tx) => {
+    await tx.userInvite.update({
+      where: { id: invite.id },
+      data: {
+        status: "revoked",
+      },
+    });
+
+    const rotatedInvite = await tx.userInvite.create({
+      data: {
+        organizationId: invite.organizationId,
+        userId: invite.userId,
+        invitedById: args.actorId,
+        token: replacementToken,
+        expiresAt: replacementExpiresAt,
+      },
+    });
+
+    await tx.auditEvent.create({
+      data: {
+        organizationId: invite.organizationId,
+        actorId: args.actorId,
+        entityType: "user_invite",
+        entityId: invite.id,
+        action: "rotated",
+        metadata: {
+          email: invite.user.email,
+          replacementInviteId: rotatedInvite.id,
+          replacementExpiresAt: replacementExpiresAt.toISOString(),
+        },
+      },
+    });
+
+    return rotatedInvite;
+  });
+
+  await attemptInviteDelivery({
+    inviteId: replacementInvite.id,
+    organizationId: args.organizationId,
+    actorId: args.actorId,
+    actorName: args.actorName,
+    actorEmail: args.actorEmail,
+  });
+}
+
 export async function createLeadListAction(formData: FormData) {
   const user = await requireUser();
   const file = formData.get("file");
@@ -628,6 +710,24 @@ export async function createReplacementInviteAction(userId: string) {
 
   await createInviteForExistingUser({
     userId,
+    organizationId: user.organizationId,
+    actorId: user.id,
+    actorName: user.name || "",
+    actorEmail: user.email,
+  });
+
+  revalidatePath("/admin/users");
+}
+
+export async function rotateUserInviteAction(inviteId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  await rotatePendingInvite({
+    inviteId,
     organizationId: user.organizationId,
     actorId: user.id,
     actorName: user.name || "",

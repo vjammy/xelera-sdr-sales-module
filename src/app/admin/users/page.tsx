@@ -1,11 +1,17 @@
 import { UserRole } from "@prisma/client";
-import { createReplacementInviteAction, createUserInviteAction, resendUserInviteAction, revokeUserInviteAction } from "@/app/actions";
+import {
+  createReplacementInviteAction,
+  createUserInviteAction,
+  resendUserInviteAction,
+  revokeUserInviteAction,
+  rotateUserInviteAction,
+} from "@/app/actions";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationUsers } from "@/lib/data";
 import { getInviteDeliveryConfig } from "@/lib/invite-config";
-import { expireStaleInvitesForOrganization } from "@/lib/invites";
+import { expireStaleInvitesForOrganization, isInviteExpiringSoon } from "@/lib/invites";
 import { canManageUsers } from "@/lib/permissions";
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
@@ -26,6 +32,10 @@ export default async function UsersPage() {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const pendingInviteCount = users.filter((member) => member.invites.some((invite) => invite.status === "pending")).length;
+  const expiringSoonCount = users.filter((member) =>
+    member.invites.some((invite) => invite.status === "pending" && isInviteExpiringSoon(invite.expiresAt)),
+  ).length;
 
   return (
     <WorkspaceShell user={user}>
@@ -39,12 +49,23 @@ export default async function UsersPage() {
             Users created here belong only to this organization. Managers and admins can add seats without
             crossing tenant boundaries or touching another workspace.
           </p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:max-w-xl">
+            <div className="rounded-2xl bg-slate-100 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Pending Invites</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-950">{pendingInviteCount}</p>
+            </div>
+            <div className="rounded-2xl bg-amber-50 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Expiring Soon</p>
+              <p className="mt-2 text-2xl font-semibold text-amber-950">{expiringSoonCount}</p>
+            </div>
+          </div>
 
           <div className="mt-6 space-y-4">
             {users.map((member) => {
               const pendingInvite = member.invites.find((invite) => invite.status === "pending");
               const latestInvite = member.invites[0];
               const canIssueReplacement = !member.passwordHash && !pendingInvite && latestInvite;
+              const expiringSoon = pendingInvite ? isInviteExpiringSoon(pendingInvite.expiresAt) : false;
 
               return (
                 <article
@@ -80,11 +101,24 @@ export default async function UsersPage() {
                   {pendingInvite ? (
                     <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-950">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="font-semibold">Pending activation invite</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p className="font-semibold">Pending activation invite</p>
+                          {expiringSoon ? (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-900">
+                              Expiring soon
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-xs uppercase tracking-[0.18em] text-amber-700">
                           Expires {formatter.format(pendingInvite.expiresAt)}
                         </p>
                       </div>
+                      {expiringSoon ? (
+                        <p className="mt-3 rounded-2xl border border-amber-200 bg-white/70 px-4 py-3 text-sm leading-7 text-amber-950">
+                          This link is close to expiring. Rotate it now to give the user a fresh 7-day activation window
+                          without waiting for the current invite to lapse.
+                        </p>
+                      ) : null}
                       <div className="mt-3 rounded-2xl bg-white/80 px-4 py-3 text-slate-700">
                         {pendingInvite.deliveryState === "sent" ? (
                           <p>
@@ -110,6 +144,16 @@ export default async function UsersPage() {
                       </a>
                       {canManageUsers(user.role) ? (
                         <div className="mt-4 flex flex-wrap gap-3">
+                          {expiringSoon ? (
+                            <form action={rotateUserInviteAction.bind(null, pendingInvite.id)}>
+                              <button
+                                type="submit"
+                                className="rounded-full border border-slate-300 bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                              >
+                                Rotate invite now
+                              </button>
+                            </form>
+                          ) : null}
                           <form action={resendUserInviteAction.bind(null, pendingInvite.id)}>
                             <button
                               type="submit"
