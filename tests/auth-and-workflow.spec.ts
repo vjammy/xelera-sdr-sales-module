@@ -563,6 +563,12 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   const history = page.locator("[data-invite-digest-history]");
   await expect(history).toBeVisible();
   await expect(history).toContainText(/Manual fallback|Emailed successfully|Delivery failed/);
+
+  await page.goto("/admin/digests");
+  const opsHistory = page.locator("[data-digest-ops-history]");
+  await expect(opsHistory).toBeVisible();
+  await expect(opsHistory).toContainText("ava.manager@xelera.ai");
+  await expect(opsHistory).toContainText(/manual|sent|failed|skipped/i);
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

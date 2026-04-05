@@ -198,6 +198,50 @@ export async function getInviteDigestHistory(recipientEmail: string, organizatio
     .filter((entry) => entry !== null);
 }
 
+export async function getOrganizationInviteDigestHistory(organizationId: string) {
+  const events = await prisma.auditEvent.findMany({
+    where: {
+      organizationId,
+      entityType: "invite_hygiene_digest",
+    },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+  });
+
+  return events.map((event) => {
+    const metadata =
+      event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+        ? (event.metadata as Record<string, unknown>)
+        : null;
+    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+      ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
+      : [];
+
+    return {
+      id: event.id,
+      createdAt: event.createdAt,
+      action: event.action,
+      alertCount: typeof metadata?.alertCount === "number" ? metadata.alertCount : 0,
+      staleCount: typeof metadata?.staleCount === "number" ? metadata.staleCount : 0,
+      expiringSoonCount: typeof metadata?.expiringSoonCount === "number" ? metadata.expiringSoonCount : 0,
+      recipients: Array.isArray(metadata?.recipients)
+        ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
+        : [],
+      recipientDeliveries: recipientDeliveries.map((delivery, index) => ({
+        id: `${event.id}-${index}`,
+        email: typeof delivery.email === "string" ? delivery.email : "unknown",
+        deliveryState:
+          typeof delivery.deliveryState === "string" ? delivery.deliveryState : "skipped",
+        alertCount: typeof delivery.alertCount === "number" ? delivery.alertCount : 0,
+        staleCount: typeof delivery.staleCount === "number" ? delivery.staleCount : 0,
+        expiringSoonCount:
+          typeof delivery.expiringSoonCount === "number" ? delivery.expiringSoonCount : 0,
+        preference: typeof delivery.preference === "string" ? delivery.preference : "all_alerts",
+      })),
+    };
+  });
+}
+
 export async function getAssignableSalespeople(organizationId: string) {
   return prisma.user.findMany({
     where: {
