@@ -270,26 +270,31 @@ export default async function Home() {
             </div>
             <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {inviteActivity.map((item) => (
-                <Link
+                <article
                   key={item.id}
-                  href={item.href}
-                  className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
+                  className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                       {formatDate(item.createdAt)} by {item.actorName}
                     </p>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getActivityBadgeClasses(
+                    <Link
+                      href={item.outcomeHref}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] transition hover:opacity-85 ${getActivityBadgeClasses(
                         item.outcomeTone,
                       )}`}
                     >
                       {item.outcomeLabel}
-                    </span>
+                    </Link>
                   </div>
-                  <p className="mt-2 text-lg font-semibold text-slate-950">{item.title}</p>
+                  <Link
+                    href={item.href}
+                    className="mt-2 block text-lg font-semibold text-slate-950 transition hover:text-slate-700"
+                  >
+                    {item.title}
+                  </Link>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-                </Link>
+                </article>
               ))}
             </div>
           </div>

@@ -245,6 +245,7 @@ export async function getDashboardData(user: {
     outcomeTone: "success" | "warning" | "neutral";
     description: string;
     href: string;
+    outcomeHref: string;
   }> = inviteActivity.map((event) => {
     const metadata =
       event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
@@ -266,6 +267,7 @@ export async function getDashboardData(user: {
             ? "Expiring activation links were refreshed from the dashboard."
             : "No expiring activation links needed rotation.",
         href: "/admin/users?attention=expiring_soon",
+        outcomeHref: "/admin/users?attention=expiring_soon",
       };
     }
 
@@ -304,6 +306,12 @@ export async function getDashboardData(user: {
         recipientCount === 1 ? "" : "s"
       }.`,
       href: "/admin/digests",
+      outcomeHref:
+        event.action === "sent"
+          ? "/admin/digests?state=sent"
+          : event.action === "skipped"
+            ? "/admin/digests?state=skipped"
+            : `/admin/digests?state=${event.action}`,
     };
   });
 
