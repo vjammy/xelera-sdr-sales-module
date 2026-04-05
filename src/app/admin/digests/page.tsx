@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { retryInviteDigestRecipientsAction, runInviteDigestNowAction } from "@/app/actions";
+import { ShareLinkPanel } from "@/components/share-link-panel";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
@@ -148,6 +149,15 @@ export default async function DigestOpsPage(props: {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const currentViewPath = buildDigestHref({
+    page: currentPage,
+    state: filterState,
+    recipientQuery,
+  });
+  const shareUrl = new URL(currentViewPath, appUrl).toString();
   const presets = [
     {
       label: "All runs",
@@ -275,6 +285,13 @@ export default async function DigestOpsPage(props: {
                 </Link>
               );
             })}
+          </div>
+          <div className="mt-4">
+            <ShareLinkPanel
+              title="Share this view"
+              description="Copy the current filters and page into a direct link so another manager lands on the same digest investigation view."
+              url={shareUrl}
+            />
           </div>
           {filterState !== "all" || recipientQuery ? (
             <p className="mt-4 text-sm text-slate-600" data-digest-filter-summary>
