@@ -9,6 +9,8 @@ export type ProviderReadinessItem = {
   missingEnvNames?: string[];
   actionLabel?: string;
   actionHref?: string;
+  setupTitle?: string;
+  setupSteps?: string[];
 };
 
 function hasEnv(name: string) {
@@ -39,8 +41,14 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         hasResendKey && hasAuthFrom
           ? []
           : ["RESEND_API_KEY", ...(hasAuthFrom ? [] : ["AUTH_FROM_EMAIL"])],
-      actionLabel: hasResendKey && hasAuthFrom ? undefined : "Add auth email provider env",
-      actionHref: hasResendKey && hasAuthFrom ? undefined : "/admin/sends",
+      actionLabel: hasResendKey && hasAuthFrom ? undefined : "Open auth email setup",
+      actionHref: hasResendKey && hasAuthFrom ? undefined : "/admin/setup#auth_email",
+      setupTitle: "Configure passwordless auth delivery",
+      setupSteps: [
+        "Add RESEND_API_KEY in Vercel for the environments you use.",
+        "Set AUTH_FROM_EMAIL to the sender address you want for magic-link sign-in.",
+        "Redeploy production after updating email provider credentials.",
+      ],
     },
     {
       key: "outbound_email",
@@ -55,8 +63,14 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         hasResendKey && hasOutboundFrom
           ? []
           : ["RESEND_API_KEY", ...(hasOutboundFrom ? [] : ["OUTBOUND_FROM_EMAIL"])],
-      actionLabel: hasResendKey && hasOutboundFrom ? undefined : "Add outbound email provider env",
-      actionHref: hasResendKey && hasOutboundFrom ? undefined : "/admin/sends",
+      actionLabel: hasResendKey && hasOutboundFrom ? undefined : "Open outbound email setup",
+      actionHref: hasResendKey && hasOutboundFrom ? undefined : "/admin/setup#outbound_email",
+      setupTitle: "Configure outbound delivery",
+      setupSteps: [
+        "Add RESEND_API_KEY in Vercel so the outbound worker can send real emails.",
+        "Set OUTBOUND_FROM_EMAIL to the verified sender identity for SDR sequences.",
+        "Use Send Ops to process the queue once the provider is configured.",
+      ],
     },
     {
       key: "ai_generation",
@@ -70,8 +84,14 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
             ? "Research and drafting are still using mock generation in this environment."
             : `AI provider "${aiProvider}" is selected, but AI_API_KEY is missing so the app will fall back to mock generation.`,
       missingEnvNames: aiProvider !== "mock" && hasAiKey ? [] : aiProvider === "mock" ? ["AI_PROVIDER", "AI_API_KEY"] : ["AI_API_KEY"],
-      actionLabel: aiProvider !== "mock" && hasAiKey ? undefined : "Add AI provider env",
-      actionHref: aiProvider !== "mock" && hasAiKey ? undefined : "/admin/sends",
+      actionLabel: aiProvider !== "mock" && hasAiKey ? undefined : "Open AI setup",
+      actionHref: aiProvider !== "mock" && hasAiKey ? undefined : "/admin/setup#ai_generation",
+      setupTitle: "Configure research and drafting provider",
+      setupSteps: [
+        "Set AI_PROVIDER to the provider you want to use outside mock mode.",
+        "Add AI_API_KEY for that provider in Vercel.",
+        "Optionally set AI_MODEL and AI_BASE_URL if you need a non-default model or compatible endpoint.",
+      ],
     },
     {
       key: "cron_protection",
@@ -83,8 +103,14 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
           ? "Protected cron routes can run with bearer-token authorization."
           : "CRON_SECRET is missing, so scheduled routes cannot be safely triggered in this environment.",
       missingEnvNames: hasCronSecret ? [] : ["CRON_SECRET"],
-      actionLabel: hasCronSecret ? undefined : "Add cron auth env",
-      actionHref: hasCronSecret ? undefined : "/admin/sends",
+      actionLabel: hasCronSecret ? undefined : "Open cron setup",
+      actionHref: hasCronSecret ? undefined : "/admin/setup#cron_protection",
+      setupTitle: "Configure protected scheduled work",
+      setupSteps: [
+        "Set CRON_SECRET in Vercel for every environment that should run protected cron routes.",
+        "Keep the bearer secret consistent with any manual operational scripts you use.",
+        "On Hobby, outbound processing is limited to a daily cron schedule, so use Send Ops for manual runs between scheduled executions.",
+      ],
     },
   ];
 }

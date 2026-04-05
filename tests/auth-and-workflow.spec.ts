@@ -836,9 +836,16 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(readiness).toContainText("RESEND_API_KEY");
   await expect(readiness).toContainText("AI_PROVIDER");
   await expect(readiness).toContainText("AI_API_KEY");
-  await expect(readiness).toContainText("Add auth email provider env");
-  await expect(readiness).toContainText("Add outbound email provider env");
-  await expect(readiness).toContainText("Add AI provider env");
+  await readiness.getByRole("link", { name: "Open auth email setup" }).click();
+  await expect(page).toHaveURL(/\/admin\/setup#auth_email/);
+  const setupChecklist = page.locator("[data-admin-setup-checklist]");
+  await expect(setupChecklist).toBeVisible();
+  await expect(setupChecklist).toContainText("Configure passwordless auth delivery");
+  await expect(setupChecklist).toContainText("RESEND_API_KEY");
+  await expect(setupChecklist).toContainText("AUTH_FROM_EMAIL");
+  await expect(setupChecklist).toContainText("Configure outbound delivery");
+  await expect(setupChecklist).toContainText("Configure research and drafting provider");
+  await expect(setupChecklist).toContainText("On Hobby, outbound processing is limited to a daily cron schedule");
 
   await page.goto("/");
   const dashboardReadiness = page.locator("[data-dashboard-provider-readiness]");
@@ -846,6 +853,8 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(dashboardReadiness).toContainText("Pilot infrastructure status");
   await expect(dashboardReadiness).toContainText("Mock provider mode");
   await expect(dashboardReadiness).toContainText("RESEND_API_KEY");
+  await dashboardReadiness.getByRole("link", { name: "Open AI setup" }).click();
+  await expect(page).toHaveURL(/\/admin\/setup#ai_generation/);
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
