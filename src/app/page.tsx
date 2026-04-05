@@ -29,6 +29,14 @@ function getActivityBadgeClasses(tone: "success" | "warning" | "neutral") {
   return "bg-slate-200 text-slate-800";
 }
 
+function getSeverityBadgeClasses(tone: "warning" | "neutral") {
+  if (tone === "warning") {
+    return "bg-rose-100 text-rose-950";
+  }
+
+  return "bg-amber-100 text-amber-950";
+}
+
 export default async function Home() {
   const user = await requireUser();
   const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity } =
@@ -293,6 +301,17 @@ export default async function Home() {
                   >
                     {item.title}
                   </Link>
+                  {item.severityLabel && item.severityTone ? (
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getSeverityBadgeClasses(
+                          item.severityTone,
+                        )}`}
+                      >
+                        {item.severityLabel}
+                      </span>
+                    </div>
+                  ) : null}
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
                   {item.recipientSummary ? (
                     <div className="mt-2 space-y-2">

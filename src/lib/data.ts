@@ -212,6 +212,30 @@ function getAttentionRecipientPriority(args: {
   };
 }
 
+function getHighestSeverityDetails(recipientDeliveries: Array<Record<string, unknown>>) {
+  const attentionDeliveries = recipientDeliveries.filter(
+    (delivery) => delivery.deliveryState === "failed" || delivery.deliveryState === "manual",
+  );
+
+  if (!attentionDeliveries.length) {
+    return null;
+  }
+
+  const hasFailedDelivery = attentionDeliveries.some((delivery) => delivery.deliveryState === "failed");
+
+  if (hasFailedDelivery) {
+    return {
+      label: "Highest severity: Delivery failed",
+      tone: "warning" as const,
+    };
+  }
+
+  return {
+    label: "Highest severity: Manual fallback",
+    tone: "neutral" as const,
+  };
+}
+
 export async function getDashboardData(user: {
   id: string;
   organizationId: string;
@@ -300,6 +324,8 @@ export async function getDashboardData(user: {
     description: string;
     href: string;
     outcomeHref: string;
+    severityLabel?: string;
+    severityTone?: "warning" | "neutral";
     detailLabel?: string;
     detailHref?: string;
     recipientSummary?: string;
@@ -336,10 +362,11 @@ export async function getDashboardData(user: {
     const recipients = Array.isArray(metadata?.recipients)
       ? (metadata.recipients.filter((entry) => typeof entry === "string") as string[])
       : [];
-    const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+      const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
       ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
-      : [];
-    const recipientCount = recipients.length;
+        : [];
+      const highestSeverity = getHighestSeverityDetails(recipientDeliveries);
+      const recipientCount = recipients.length;
     const actionLabel =
       event.action === "sent"
         ? "Digest emailed"
@@ -366,17 +393,19 @@ export async function getDashboardData(user: {
           : event.action === "skipped"
             ? "neutral"
             : "warning",
-      description: `${alertCount} alert${alertCount === 1 ? "" : "s"} across ${recipientCount} recipient${
-        recipientCount === 1 ? "" : "s"
-      }.`,
-      href: "/admin/digests",
-      outcomeHref:
+        description: `${alertCount} alert${alertCount === 1 ? "" : "s"} across ${recipientCount} recipient${
+          recipientCount === 1 ? "" : "s"
+        }.`,
+        href: "/admin/digests",
+        outcomeHref:
         event.action === "sent"
           ? "/admin/digests?state=sent"
           : event.action === "skipped"
-            ? "/admin/digests?state=skipped"
+          ? "/admin/digests?state=skipped"
             : `/admin/digests?state=${event.action}`,
-      ...(event.action === "manual" || event.action === "failed"
+        severityLabel: highestSeverity?.label,
+        severityTone: highestSeverity?.tone,
+        ...(event.action === "manual" || event.action === "failed"
         ? (() => {
             const attentionRecipients = recipientDeliveries
               .filter((delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed")

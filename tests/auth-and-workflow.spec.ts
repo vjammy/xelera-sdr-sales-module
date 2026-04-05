@@ -882,6 +882,7 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(priorityActivityCard).toContainText(
     new RegExp(`Affected recipients: ${failedPriorityEmail}, ${manualPriorityEmail}`),
   );
+  await expect(priorityActivityCard).toContainText("Highest severity: Delivery failed");
   await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${failedPriorityEmail}`) })).toBeVisible();
   await expect(priorityActivityCard.getByRole("link", { name: new RegExp(`Needs review: ${manualPriorityEmail}`) })).toBeVisible();
   await expect(priorityActivityCard.getByRole("link", { name: /Needs review:/ }).nth(0)).toContainText(failedPriorityEmail);
