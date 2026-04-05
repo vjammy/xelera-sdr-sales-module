@@ -22,6 +22,10 @@ function getDeliveryLabel(deliveryState: string) {
   return "Skipped";
 }
 
+function isAttentionState(deliveryState: string) {
+  return deliveryState === "manual" || deliveryState === "failed";
+}
+
 export default async function DigestRecipientPage(props: {
   searchParams?: Promise<{ email?: string }>;
 }) {
@@ -51,6 +55,18 @@ export default async function DigestRecipientPage(props: {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const recentAttentionRuns = digestHistory.filter((entry) => isAttentionState(entry.deliveryState)).length;
+  const recentSuccessfulRuns = digestHistory.filter((entry) => entry.deliveryState === "sent").length;
+  let currentAttentionStreak = 0;
+  for (const entry of digestHistory) {
+    if (isAttentionState(entry.deliveryState)) {
+      currentAttentionStreak += 1;
+      continue;
+    }
+
+    break;
+  }
+  const needsAttentionBanner = recentAttentionRuns >= 2 || currentAttentionStreak >= 2;
 
   return (
     <WorkspaceShell user={user}>
@@ -108,6 +124,29 @@ export default async function DigestRecipientPage(props: {
               </Link>
             ) : null}
           </div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3" data-recipient-digest-summary>
+            <div className="rounded-2xl bg-slate-900/80 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Recent Attention Runs</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{recentAttentionRuns}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-900/80 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Successful Sends</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{recentSuccessfulRuns}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-900/80 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Current Attention Streak</p>
+              <p className="mt-2 text-2xl font-semibold text-white">{currentAttentionStreak}</p>
+            </div>
+          </div>
+          {needsAttentionBanner ? (
+            <div className="mt-6 rounded-[24px] border border-amber-300/40 bg-amber-400/10 p-4" data-recipient-attention-banner>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-200">Needs repeated attention</p>
+              <p className="mt-2 text-sm leading-7 text-amber-50">
+                This recipient has hit manual fallback or failed delivery in multiple recent digest runs. Consider rerunning the digest,
+                opening the onboarding seat, or checking whether their digest preference or inbox destination needs intervention.
+              </p>
+            </div>
+          ) : null}
         </article>
 
         <article className="rounded-[32px] border border-white/80 bg-white/90 p-8 shadow-lg shadow-slate-200/40">

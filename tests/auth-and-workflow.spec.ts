@@ -581,6 +581,8 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
   await expect(page.getByRole("heading", { name: /Recent invite hygiene deliveries for this recipient/i })).toBeVisible();
   await expect(page.getByText("ava.manager@xelera.ai")).toBeVisible();
+  await expect(page.locator("[data-recipient-digest-summary]")).toBeVisible();
+  await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
     /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
   );
