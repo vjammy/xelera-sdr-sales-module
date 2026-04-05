@@ -85,6 +85,20 @@ async function createPendingInviteForTest(args: {
   });
 }
 
+async function getLatestPendingInvite(email: string) {
+  return db.userInvite.findFirst({
+    where: {
+      status: "pending",
+      user: {
+        email,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}
+
 async function switchUser(page: Page, email: string, password = "Welcome123!") {
   const signOutButton = page.getByRole("button", { name: "Sign out" });
   if (await signOutButton.isVisible().catch(() => false)) {
@@ -584,11 +598,34 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await expect(hygieneSummary).toBeVisible();
   await expect(hygieneSummary).toContainText("Stale Pending Invites");
   await expect(hygieneSummary).toContainText("Expiring Soon Invites");
-  await hygieneSummary.getByRole("link", { name: /Expiring Soon Invites/i }).click();
+  await hygieneSummary.getByRole("link", { name: "Open stale seats" }).click();
+  await expect(page).toHaveURL(/\/admin\/users\?attention=stale/);
+  await expect(page.locator("[data-user-filter-summary]")).toContainText("stale pending invites");
+  await expect(page.locator(`[data-user-email="${staleEmail}"]`)).toBeVisible();
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`)).toHaveCount(0);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Rotate expiring invites now" }).click();
+  await expect
+    .poll(async () => {
+      const pendingInvite = await getLatestPendingInvite(expiringEmail);
+      if (!pendingInvite) {
+        return "missing";
+      }
+
+      return pendingInvite.expiresAt.getTime() - Date.now() > 1000 * 60 * 60 * 48 ? "rotated" : "expiring";
+    })
+    .toBe("rotated");
+  await page.goto("/admin/users?attention=expiring_soon");
+  await expect(page.locator("[data-user-filter-summary]")).toContainText("expiring soon invites");
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`)).toHaveCount(0);
+  await expect(page.getByText("No onboarding seats match the current filters.")).toBeVisible();
+
+  await page.goto("/");
+  await hygieneSummary.getByRole("link", { name: "Review expiring seats" }).click();
   await expect(page).toHaveURL(/\/admin\/users\?attention=expiring_soon/);
   await expect(page.locator("[data-user-filter-summary]")).toContainText("expiring soon invites");
-  await expect(page.locator(`[data-user-email="${expiringEmail}"]`)).toBeVisible();
-  await expect(page.locator(`[data-user-email="${staleEmail}"]`)).toHaveCount(0);
+  await expect(page.locator(`[data-user-email="${expiringEmail}"]`)).toHaveCount(0);
 
   await page.goto("/");
   const callout = page.locator("[data-stale-invite-callout]");

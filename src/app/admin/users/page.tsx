@@ -286,8 +286,8 @@ export default async function UsersPage(props: {
           </div>
           {!users.length ? (
             <p className="mt-6 text-sm leading-7 text-slate-600">
-              {emailFilter
-                ? "No onboarding seats match the current email filter."
+              {emailFilter || attentionFilter !== "all"
+                ? "No onboarding seats match the current filters."
                 : "No onboarding seats have been created for this organization yet."}
             </p>
           ) : null}

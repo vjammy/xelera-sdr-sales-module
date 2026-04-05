@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rotateExpiringInvitesDashboardAction } from "@/app/actions";
 import { MetricCard } from "@/components/metric-card";
 import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
@@ -84,26 +85,46 @@ export default async function Home() {
               </Link>
             </div>
             <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              <Link
-                href="/admin/users?attention=stale"
-                className="rounded-[24px] border border-amber-200 bg-white/90 px-4 py-4 transition hover:border-amber-300 hover:bg-amber-50/70"
-              >
+              <div className="rounded-[24px] border border-amber-200 bg-white/90 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-900">Stale Pending Invites</p>
                 <p className="mt-2 text-3xl font-semibold text-slate-950">{staleInviteAlerts.length}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   Pending seats that have gone untouched for several days and should be reviewed now.
                 </p>
-              </Link>
-              <Link
-                href="/admin/users?attention=expiring_soon"
-                className="rounded-[24px] border border-orange-200 bg-white/90 px-4 py-4 transition hover:border-orange-300 hover:bg-orange-50/70"
-              >
+                <div className="mt-4">
+                  <Link
+                    href="/admin/users?attention=stale"
+                    className="inline-flex rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Open stale seats
+                  </Link>
+                </div>
+              </div>
+              <div className="rounded-[24px] border border-orange-200 bg-white/90 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-900">Expiring Soon Invites</p>
                 <p className="mt-2 text-3xl font-semibold text-slate-950">{expiringSoonInviteAlerts.length}</p>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   Pending seats with little time left on their activation links, ready for fast rotation.
                 </p>
-              </Link>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    href="/admin/users?attention=expiring_soon"
+                    className="inline-flex rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+                  >
+                    Review expiring seats
+                  </Link>
+                  {expiringSoonInviteAlerts.length ? (
+                    <form action={rotateExpiringInvitesDashboardAction}>
+                      <button
+                        type="submit"
+                        className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                      >
+                        Rotate expiring invites now
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

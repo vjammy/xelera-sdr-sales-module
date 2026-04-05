@@ -10,7 +10,11 @@ import { requireUser } from "@/lib/auth";
 import { deliverInviteEmail } from "@/lib/email";
 import { runInviteHygieneDigest } from "@/lib/invite-digest-runner";
 import { parseLeadFile } from "@/lib/importer";
-import { expireInviteIfNeeded, expireStaleInvitesForOrganization } from "@/lib/invites";
+import {
+  expireInviteIfNeeded,
+  expireStaleInvitesForOrganization,
+  INVITE_EXPIRING_SOON_WINDOW_MS,
+} from "@/lib/invites";
 import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import {
@@ -743,6 +747,54 @@ export async function rotateUserInviteAction(inviteId: string) {
     actorEmail: user.email,
   });
 
+  revalidatePath("/admin/users");
+}
+
+export async function rotateExpiringInvitesDashboardAction() {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to manage users.");
+  }
+
+  const now = new Date();
+  const windowEnd = new Date(now.getTime() + INVITE_EXPIRING_SOON_WINDOW_MS);
+  const invites = await prisma.userInvite.findMany({
+    where: {
+      organizationId: user.organizationId,
+      status: "pending",
+      expiresAt: {
+        gt: now,
+        lte: windowEnd,
+      },
+    },
+    orderBy: { expiresAt: "asc" },
+  });
+
+  for (const invite of invites) {
+    await rotatePendingInvite({
+      inviteId: invite.id,
+      organizationId: user.organizationId,
+      actorId: user.id,
+      actorName: user.name || "",
+      actorEmail: user.email,
+    });
+  }
+
+  await prisma.auditEvent.create({
+    data: {
+      organizationId: user.organizationId,
+      actorId: user.id,
+      entityType: "invite_hygiene_dashboard",
+      entityId: user.organizationId,
+      action: "rotated_expiring_invites",
+      metadata: {
+        inviteCount: invites.length,
+      },
+    },
+  });
+
+  revalidatePath("/");
   revalidatePath("/admin/users");
 }
 
