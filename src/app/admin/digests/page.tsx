@@ -1,9 +1,54 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { retryInviteDigestRecipientsAction, runInviteDigestNowAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
 import { canManageUsers } from "@/lib/permissions";
+
+type DigestFilterState = "all" | "sent" | "manual" | "failed" | "skipped" | "retry";
+
+function normalizeFilterState(value?: string): DigestFilterState {
+  if (value === "sent" || value === "manual" || value === "failed" || value === "skipped" || value === "retry") {
+    return value;
+  }
+
+  return "all";
+}
+
+function matchesRecipientFilter(
+  query: string,
+  entry: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>[number],
+) {
+  if (!query) {
+    return true;
+  }
+
+  const normalizedQuery = query.toLowerCase();
+
+  return (
+    entry.recipients.some((recipient) => recipient.toLowerCase().includes(normalizedQuery)) ||
+    entry.requestedRecipients.some((recipient) => recipient.toLowerCase().includes(normalizedQuery)) ||
+    entry.recipientDeliveries.some((delivery) => delivery.email.toLowerCase().includes(normalizedQuery))
+  );
+}
+
+function filterDigestHistory(
+  history: Awaited<ReturnType<typeof getOrganizationInviteDigestHistory>>,
+  state: DigestFilterState,
+  recipientQuery: string,
+) {
+  return history.filter((entry) => {
+    const matchesState =
+      state === "all"
+        ? true
+        : state === "retry"
+          ? entry.isTargetedRetry
+          : entry.action === state;
+
+    return matchesState && matchesRecipientFilter(recipientQuery, entry);
+  });
+}
 
 function getRetryOutcomeLabel(args: {
   deliveryState: string;
@@ -24,14 +69,20 @@ function getRetryOutcomeLabel(args: {
   return "Skipped on retry";
 }
 
-export default async function DigestOpsPage() {
+export default async function DigestOpsPage(props: {
+  searchParams?: Promise<{ state?: string; recipient?: string }>;
+}) {
   const user = await requireUser();
 
   if (!canManageUsers(user.role)) {
     notFound();
   }
 
+  const searchParams = (await props.searchParams) ?? {};
+  const filterState = normalizeFilterState(searchParams.state);
+  const recipientQuery = searchParams.recipient?.trim() ?? "";
   const history = await getOrganizationInviteDigestHistory(user.organizationId);
+  const filteredHistory = filterDigestHistory(history, filterState, recipientQuery);
   const formatter = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -68,13 +119,60 @@ export default async function DigestOpsPage() {
               </h2>
             </div>
           </div>
+          <form className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 lg:grid-cols-[220px_minmax(0,1fr)_auto_auto]">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Run state
+              <select
+                name="state"
+                defaultValue={filterState}
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+              >
+                <option value="all">All runs</option>
+                <option value="sent">Emailed</option>
+                <option value="manual">Manual fallback</option>
+                <option value="failed">Failed</option>
+                <option value="skipped">Skipped</option>
+                <option value="retry">Targeted retries</option>
+              </select>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Recipient
+              <input
+                type="search"
+                name="recipient"
+                defaultValue={recipientQuery}
+                placeholder="Filter by recipient email"
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400"
+              />
+            </label>
+            <button
+              type="submit"
+              className="self-end rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Apply filters
+            </button>
+            <Link
+              href="/admin/digests"
+              className="self-end rounded-full border border-slate-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+            >
+              Clear
+            </Link>
+          </form>
+          {filterState !== "all" || recipientQuery ? (
+            <p className="mt-4 text-sm text-slate-600" data-digest-filter-summary>
+              Showing {filteredHistory.length} run{filteredHistory.length === 1 ? "" : "s"}
+              {filterState !== "all" ? ` for ${filterState === "retry" ? "targeted retries" : filterState}` : ""}
+              {recipientQuery ? `${filterState !== "all" ? " matching" : " matching"} "${recipientQuery}"` : ""}.
+            </p>
+          ) : null}
 
-          {history.length ? (
+          {filteredHistory.length ? (
             <div className="mt-6 space-y-4" data-digest-ops-history>
-              {history.map((entry) => (
+              {filteredHistory.map((entry) => (
                 <article
                   key={entry.id}
                   className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5"
+                  data-digest-run-id={entry.id}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -171,7 +269,9 @@ export default async function DigestOpsPage() {
             </div>
           ) : (
             <p className="mt-6 text-sm leading-7 text-slate-600">
-              No invite hygiene digest runs have been recorded for this organization yet.
+              {filterState !== "all" || recipientQuery
+                ? "No digest runs match the current filters."
+                : "No invite hygiene digest runs have been recorded for this organization yet."}
             </p>
           )}
         </article>

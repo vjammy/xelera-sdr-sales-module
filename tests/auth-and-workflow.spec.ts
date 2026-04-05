@@ -591,6 +591,13 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
     .toBeGreaterThan(digestCountBeforeTargetedRetry);
   await expect(opsHistory).toContainText("Retry attempted");
   await expect(opsHistory).toContainText(/Still needs attention|Recovered on retry|Skipped on retry/);
+
+  await page.goto("/admin/digests?state=retry&recipient=ava.manager@xelera.ai");
+  await expect(page.locator("[data-digest-filter-summary]")).toContainText("targeted retries");
+  const filteredHistory = page.locator("[data-digest-ops-history]");
+  await expect(filteredHistory).toContainText("Retry attempted");
+  await expect(filteredHistory).toContainText("ava.manager@xelera.ai");
+  await expect(filteredHistory).not.toContainText("Digest emailed");
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {
