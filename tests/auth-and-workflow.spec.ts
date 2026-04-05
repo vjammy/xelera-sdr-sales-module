@@ -7,6 +7,14 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
+async function countInviteDigestEvents() {
+  return db.auditEvent.count({
+    where: {
+      entityType: "invite_hygiene_digest",
+    },
+  });
+}
+
 async function login(page: Page, email: string, password = "Welcome123!") {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -569,6 +577,12 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(opsHistory).toBeVisible();
   await expect(opsHistory).toContainText("ava.manager@xelera.ai");
   await expect(opsHistory).toContainText(/manual|sent|failed|skipped/i);
+
+  const digestCountBeforeManualRun = await countInviteDigestEvents();
+  await page.getByRole("button", { name: "Run digest now" }).click();
+  await expect
+    .poll(async () => await countInviteDigestEvents())
+    .toBeGreaterThan(digestCountBeforeManualRun);
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { runInviteDigestNowAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
@@ -29,6 +30,14 @@ export default async function DigestOpsPage() {
             Review recent scheduled digest runs, see who received each reminder, and spot fallback or failure states
             without opening every individual profile.
           </p>
+          <form action={runInviteDigestNowAction} className="mt-6">
+            <button
+              type="submit"
+              className="rounded-full bg-teal-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-teal-300"
+            >
+              Run digest now
+            </button>
+          </form>
         </article>
 
         <article className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40">

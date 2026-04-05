@@ -8,6 +8,7 @@ import { InviteDigestPreference, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { deliverInviteEmail } from "@/lib/email";
+import { runInviteHygieneDigest } from "@/lib/invite-digest-runner";
 import { parseLeadFile } from "@/lib/importer";
 import { expireInviteIfNeeded, expireStaleInvitesForOrganization } from "@/lib/invites";
 import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
@@ -743,6 +744,22 @@ export async function rotateUserInviteAction(inviteId: string) {
   });
 
   revalidatePath("/admin/users");
+}
+
+export async function runInviteDigestNowAction() {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to run digest operations.");
+  }
+
+  await runInviteHygieneDigest({
+    organizationId: user.organizationId,
+    actorId: user.id,
+  });
+
+  revalidatePath("/admin/digests");
+  revalidatePath("/settings/profile");
 }
 
 export async function completeInviteActivationAction(token: string, formData: FormData) {
