@@ -17,6 +17,18 @@ function formatInviteAge(date: Date) {
   return `${Math.floor(hours / 24)}d`;
 }
 
+function getActivityBadgeClasses(tone: "success" | "warning" | "neutral") {
+  if (tone === "success") {
+    return "bg-emerald-100 text-emerald-950";
+  }
+
+  if (tone === "warning") {
+    return "bg-amber-100 text-amber-950";
+  }
+
+  return "bg-slate-200 text-slate-800";
+}
+
 export default async function Home() {
   const user = await requireUser();
   const { leadLists, metrics, staleInviteAlerts, expiringSoonInviteAlerts, inviteIssueSummary, inviteActivity } =
@@ -263,9 +275,18 @@ export default async function Home() {
                   href={item.href}
                   className="rounded-[24px] border border-slate-200 bg-white/90 px-4 py-4 transition hover:border-slate-300 hover:bg-slate-50"
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {formatDate(item.createdAt)} by {item.actorName}
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {formatDate(item.createdAt)} by {item.actorName}
+                    </p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getActivityBadgeClasses(
+                        item.outcomeTone,
+                      )}`}
+                    >
+                      {item.outcomeLabel}
+                    </span>
+                  </div>
                   <p className="mt-2 text-lg font-semibold text-slate-950">{item.title}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
                 </Link>

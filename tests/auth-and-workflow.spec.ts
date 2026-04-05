@@ -626,6 +626,7 @@ test("manager dashboard surfaces stale and expiring invite hygiene shortcuts", a
   await expect(activityStrip).toBeVisible();
   await expect(activityStrip).toContainText("Rotated 1 expiring invite");
   await expect(activityStrip).toContainText("Latest onboarding remediation moves");
+  await expect(activityStrip).toContainText("Completed");
   await hygieneSummary.getByRole("link", { name: "Review expiring seats" }).click();
   await expect(page).toHaveURL(/\/admin\/users\?attention=expiring_soon/);
   await expect(page.locator("[data-user-filter-summary]")).toContainText("expiring soon invites");

@@ -236,7 +236,16 @@ export async function getDashboardData(user: {
     { activeIssueCount: 0, reviewedIssueCount: 0 },
   );
 
-  const inviteActivityItems = inviteActivity.map((event) => {
+  const inviteActivityItems: Array<{
+    id: string;
+    createdAt: Date;
+    actorName: string;
+    title: string;
+    outcomeLabel: string;
+    outcomeTone: "success" | "warning" | "neutral";
+    description: string;
+    href: string;
+  }> = inviteActivity.map((event) => {
     const metadata =
       event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
         ? (event.metadata as Record<string, unknown>)
@@ -250,6 +259,8 @@ export async function getDashboardData(user: {
         createdAt: event.createdAt,
         actorName: event.actor?.name ?? event.actor?.email ?? "Manager",
         title: `Rotated ${inviteCount} expiring invite${inviteCount === 1 ? "" : "s"}`,
+        outcomeLabel: inviteCount > 0 ? "Completed" : "No action needed",
+        outcomeTone: inviteCount > 0 ? "success" : "neutral",
         description:
           inviteCount > 0
             ? "Expiring activation links were refreshed from the dashboard."
@@ -277,6 +288,18 @@ export async function getDashboardData(user: {
       createdAt: event.createdAt,
       actorName: event.actor?.name ?? event.actor?.email ?? "System",
       title: actionLabel,
+      outcomeLabel:
+        event.action === "sent"
+          ? "Completed"
+          : event.action === "skipped"
+            ? "No action needed"
+            : "Manual follow-up required",
+      outcomeTone:
+        event.action === "sent"
+          ? "success"
+          : event.action === "skipped"
+            ? "neutral"
+            : "warning",
       description: `${alertCount} alert${alertCount === 1 ? "" : "s"} across ${recipientCount} recipient${
         recipientCount === 1 ? "" : "s"
       }.`,
