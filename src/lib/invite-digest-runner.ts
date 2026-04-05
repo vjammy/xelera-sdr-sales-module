@@ -39,6 +39,7 @@ function filterAlertsForPreference(args: {
 export async function runInviteHygieneDigest(args?: {
   organizationId?: string;
   actorId?: string;
+  recipientEmails?: string[];
 }) {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
@@ -78,7 +79,10 @@ export async function runInviteHygieneDigest(args?: {
       continue;
     }
 
-    const recipientEmails = organization.users.map((user) => user.email);
+    const eligibleUsers = args?.recipientEmails?.length
+      ? organization.users.filter((user) => args.recipientEmails?.includes(user.email))
+      : organization.users;
+    const recipientEmails = eligibleUsers.map((user) => user.email);
 
     if (!recipientEmails.length) {
       await prisma.auditEvent.create({
@@ -91,6 +95,7 @@ export async function runInviteHygieneDigest(args?: {
           metadata: {
             reason: "No eligible manager or admin recipients.",
             alertCount: alerts.alerts.length,
+            requestedRecipients: args?.recipientEmails ?? [],
           },
         },
       });
@@ -111,7 +116,7 @@ export async function runInviteHygieneDigest(args?: {
     let deliveryState: "manual" | "sent" | "failed" = "manual";
     const recipientDeliveries: InviteDigestRunResult["recipientDeliveries"] = [];
 
-    for (const recipient of organization.users) {
+    for (const recipient of eligibleUsers) {
       const filteredAlerts = filterAlertsForPreference({
         alerts,
         preference: recipient.inviteDigestPreference,
@@ -176,6 +181,7 @@ export async function runInviteHygieneDigest(args?: {
           expiringSoonCount: alerts.expiringSoonAlerts.length,
           recipients: recipientEmails,
           recipientDeliveries,
+          requestedRecipients: args?.recipientEmails ?? null,
         },
       },
     });

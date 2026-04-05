@@ -583,6 +583,12 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect
     .poll(async () => await countInviteDigestEvents())
     .toBeGreaterThan(digestCountBeforeManualRun);
+
+  const digestCountBeforeTargetedRetry = await countInviteDigestEvents();
+  await page.getByRole("button", { name: "Retry manual and failed recipients" }).first().click();
+  await expect
+    .poll(async () => await countInviteDigestEvents())
+    .toBeGreaterThan(digestCountBeforeTargetedRetry);
 });
 
 test("manager can limit invite digests to stale alerts only", async ({ page }) => {

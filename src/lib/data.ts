@@ -238,6 +238,9 @@ export async function getOrganizationInviteDigestHistory(organizationId: string)
           typeof delivery.expiringSoonCount === "number" ? delivery.expiringSoonCount : 0,
         preference: typeof delivery.preference === "string" ? delivery.preference : "all_alerts",
       })),
+      retryableRecipientCount: recipientDeliveries.filter(
+        (delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed",
+      ).length,
     };
   });
 }

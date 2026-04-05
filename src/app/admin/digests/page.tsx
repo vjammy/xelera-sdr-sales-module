@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { runInviteDigestNowAction } from "@/app/actions";
+import { retryInviteDigestRecipientsAction, runInviteDigestNowAction } from "@/app/actions";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationInviteDigestHistory } from "@/lib/data";
@@ -74,6 +74,16 @@ export default async function DigestOpsPage() {
                       {entry.alertCount} alerts
                     </div>
                   </div>
+                  {entry.retryableRecipientCount > 0 ? (
+                    <form action={retryInviteDigestRecipientsAction.bind(null, entry.id)} className="mt-4">
+                      <button
+                        type="submit"
+                        className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+                      >
+                        Retry manual and failed recipients
+                      </button>
+                    </form>
+                  ) : null}
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-2xl bg-white px-4 py-3">

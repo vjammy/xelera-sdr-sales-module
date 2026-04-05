@@ -762,6 +762,51 @@ export async function runInviteDigestNowAction() {
   revalidatePath("/settings/profile");
 }
 
+export async function retryInviteDigestRecipientsAction(eventId: string) {
+  const user = await requireUser();
+
+  if (!canManageUsers(user.role)) {
+    throw new Error("You do not have permission to run digest operations.");
+  }
+
+  const event = await prisma.auditEvent.findFirst({
+    where: {
+      id: eventId,
+      organizationId: user.organizationId,
+      entityType: "invite_hygiene_digest",
+    },
+  });
+
+  if (!event) {
+    throw new Error("That digest run could not be found.");
+  }
+
+  const metadata =
+    event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+      ? (event.metadata as Record<string, unknown>)
+      : null;
+  const recipientDeliveries = Array.isArray(metadata?.recipientDeliveries)
+    ? (metadata.recipientDeliveries as Array<Record<string, unknown>>)
+    : [];
+  const retryableRecipientEmails = recipientDeliveries
+    .filter((delivery) => delivery.deliveryState === "manual" || delivery.deliveryState === "failed")
+    .map((delivery) => (typeof delivery.email === "string" ? delivery.email : null))
+    .filter((email): email is string => Boolean(email));
+
+  if (!retryableRecipientEmails.length) {
+    throw new Error("This digest run has no manual or failed recipients to retry.");
+  }
+
+  await runInviteHygieneDigest({
+    organizationId: user.organizationId,
+    actorId: user.id,
+    recipientEmails: retryableRecipientEmails,
+  });
+
+  revalidatePath("/admin/digests");
+  revalidatePath("/settings/profile");
+}
+
 export async function completeInviteActivationAction(token: string, formData: FormData) {
   const parsed = activationSchema.safeParse({
     password: formData.get("password"),
