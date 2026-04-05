@@ -1,0 +1,421 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  salesperson
+  sales_manager
+  admin_operator
+}
+
+enum ListStatus {
+  uploaded
+  processing
+  research_in_progress
+  drafts_ready
+  partially_approved
+  fully_approved
+}
+
+enum LeadStatus {
+  intake_valid
+  research_pending
+  research_complete
+  draft_pending
+  review_ready
+  paused
+  rejected
+  approved
+}
+
+enum SequenceStatus {
+  draft
+  review_ready
+  approved
+  paused
+  rejected
+}
+
+enum RunStatus {
+  pending
+  in_progress
+  complete
+  failed
+}
+
+enum ImportRowStatus {
+  accepted
+  rejected
+}
+
+enum ReviewActionType {
+  manual_edit
+  regenerate_all
+  regenerate_one
+  approve
+  pause
+  reject
+  bulk_approve
+}
+
+model Organization {
+  id               String              @id @default(cuid())
+  name             String
+  slug             String              @unique
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  teams            Team[]
+  users            User[]
+  products         Product[]
+  leadLists        LeadList[]
+  leads            Lead[]
+  companies        Company[]
+  contacts         Contact[]
+  researchRuns     ResearchRun[]
+  draftRuns        DraftRun[]
+  prompts          GenerationPrompt[]
+  sequences        Sequence[]
+  reviewActions    ReviewAction[]
+  bulkApprovalBatches BulkApprovalBatch[]
+  auditEvents      AuditEvent[]
+}
+
+model Team {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+
+  @@unique([organizationId, name])
+}
+
+model User {
+  id                    String               @id @default(cuid())
+  organizationId        String
+  teamId                String?
+  name                  String
+  email                 String               @unique
+  passwordHash          String
+  role                  UserRole
+  title                 String?
+  phone                 String?
+  emailPromptPreference String?
+  sampleEmail           String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  organization          Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team                  Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  assignedLists         LeadList[]           @relation("AssignedLeadLists")
+  uploadedLists         LeadList[]           @relation("UploadedLeadLists")
+  assignedLeads         Lead[]               @relation("AssignedLeads")
+  approvedSequences     Sequence[]           @relation("ApprovedBy")
+  reviewActions         ReviewAction[]
+  prompts               GenerationPrompt[]
+  bulkApprovalBatches   BulkApprovalBatch[]
+  auditEvents           AuditEvent[]
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  organizationId   String
+  name             String
+  description      String
+  industry         String
+  productType      String
+  targetPersona    String
+  problemStatement String
+  keyBenefits      Json
+  samplePitch      String
+  pricingNotes     String?
+  isActive         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sequences        Sequence[]
+  draftRuns        DraftRun[]
+
+  @@unique([organizationId, name])
+}
+
+model LeadList {
+  id                    String          @id @default(cuid())
+  organizationId        String
+  assignedSalespersonId String?
+  uploadedById          String?
+  name                  String
+  eventSourceName       String
+  eventDate             DateTime?
+  eventCity             String?
+  eventCountry          String?
+  notes                 String?
+  uploadFileName        String?
+  totalRows             Int             @default(0)
+  acceptedRows          Int             @default(0)
+  rejectedRows          Int             @default(0)
+  status                ListStatus      @default(uploaded)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  organization          Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedSalesperson   User?           @relation("AssignedLeadLists", fields: [assignedSalespersonId], references: [id], onDelete: SetNull)
+  uploadedBy            User?           @relation("UploadedLeadLists", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploads               LeadListUpload[]
+  importRows            LeadImportRow[]
+  leads                 Lead[]
+}
+
+model LeadListUpload {
+  id            String    @id @default(cuid())
+  leadListId    String
+  fileName      String
+  mimeType      String
+  sourceType    String
+  rowCount      Int
+  createdAt     DateTime  @default(now())
+  leadList      LeadList  @relation(fields: [leadListId], references: [id], onDelete: Cascade)
+}
+
+model LeadImportRow {
+  id               String          @id @default(cuid())
+  leadListId       String
+  rowNumber        Int
+  status           ImportRowStatus
+  email            String?
+  phone            String?
+  firstName        String?
+  lastName         String?
+  companyName      String?
+  rawData          Json
+  rejectionReasons Json?
+  createdAt        DateTime        @default(now())
+  leadList         LeadList        @relation(fields: [leadListId], references: [id], onDelete: Cascade)
+}
+
+model Company {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  domain         String?
+  industry       String?
+  employeeSize   String?
+  geography      String?
+  summary        String?
+  likelyNeeds    Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts       Contact[]
+  leads          Lead[]
+  researchRuns   ResearchRun[]
+
+  @@unique([organizationId, name])
+}
+
+model Contact {
+  id                   String        @id @default(cuid())
+  organizationId       String
+  companyId            String?
+  fullName             String
+  email                String?
+  phone                String?
+  title                String?
+  roleSummary          String?
+  responsibilities     Json?
+  buyerAngle           String?
+  personalizationHooks Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company              Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  leads                Lead[]
+}
+
+model Lead {
+  id                     String        @id @default(cuid())
+  organizationId         String
+  leadListId             String
+  companyId              String?
+  contactId              String?
+  assignedSalespersonId  String?
+  fullName               String
+  email                  String?
+  phone                  String?
+  title                  String?
+  contactNotes           String?
+  status                 LeadStatus    @default(intake_valid)
+  companyResearchStatus  RunStatus     @default(pending)
+  contactResearchStatus  RunStatus     @default(pending)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  organization           Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadList               LeadList      @relation(fields: [leadListId], references: [id], onDelete: Cascade)
+  company                Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact                Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  assignedSalesperson    User?         @relation("AssignedLeads", fields: [assignedSalespersonId], references: [id], onDelete: SetNull)
+  notes                  LeadNote[]
+  researchRuns           ResearchRun[]
+  draftRuns              DraftRun[]
+  prompts                GenerationPrompt[]
+  sequence               Sequence?
+  reviewActions          ReviewAction[]
+
+  @@index([leadListId, status])
+}
+
+model LeadNote {
+  id        String    @id @default(cuid())
+  leadId     String
+  note       String
+  createdAt  DateTime  @default(now())
+  lead       Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model ResearchRun {
+  id             String        @id @default(cuid())
+  organizationId String
+  leadId         String
+  companyId      String?
+  kind           String
+  status         RunStatus     @default(pending)
+  summary        Json?
+  errorMessage   String?
+  startedAt      DateTime      @default(now())
+  completedAt    DateTime?
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead           Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company        Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+}
+
+model DraftRun {
+  id                String        @id @default(cuid())
+  organizationId    String
+  leadId            String
+  productId         String?
+  status            RunStatus     @default(pending)
+  selectedProductName String?
+  mainAngle         String?
+  tone              String?
+  painHypothesis    String?
+  suggestedCta      String?
+  messagingBrief    Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead              Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  product           Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  prompts           GenerationPrompt[]
+  sequence          Sequence?
+}
+
+model GenerationPrompt {
+  id             String        @id @default(cuid())
+  organizationId String
+  leadId         String?
+  draftRunId     String?
+  createdById    String?
+  promptType     String
+  targetEmail    Int?
+  inputPrompt    String
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  draftRun       DraftRun?     @relation(fields: [draftRunId], references: [id], onDelete: SetNull)
+  createdBy      User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+model Sequence {
+  id                String          @id @default(cuid())
+  organizationId    String
+  leadId            String          @unique
+  productId         String?
+  draftRunId        String?         @unique
+  status            SequenceStatus  @default(draft)
+  selectedProductName String?
+  valueProposition  String?
+  targetAngle       String?
+  relevantBenefits  Json?
+  mainOutreachAngle String?
+  tone              String?
+  painHypothesis    String?
+  suggestedCta      String?
+  reviewWarnings    Json?
+  approvedAt        DateTime?
+  approvedById      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead              Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  product           Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  draftRun          DraftRun?       @relation(fields: [draftRunId], references: [id], onDelete: SetNull)
+  approvedBy        User?           @relation("ApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  emails            SequenceEmail[]
+  reviewActions     ReviewAction[]
+}
+
+model SequenceEmail {
+  id                      String    @id @default(cuid())
+  sequenceId              String
+  emailOrder              Int
+  subject                 String
+  body                    String
+  scheduledSendOffsetHours Int
+  editStatus              String    @default("draft")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  sequence                Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, emailOrder])
+}
+
+model ReviewAction {
+  id             String           @id @default(cuid())
+  organizationId String
+  leadId         String
+  sequenceId     String?
+  actorId        String
+  actionType     ReviewActionType
+  prompt         String?
+  targetEmail    Int?
+  note           String?
+  beforeState    Json?
+  afterState     Json?
+  createdAt      DateTime         @default(now())
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead           Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sequence       Sequence?        @relation(fields: [sequenceId], references: [id], onDelete: SetNull)
+  actor          User             @relation(fields: [actorId], references: [id], onDelete: Cascade)
+}
+
+model BulkApprovalBatch {
+  id             String        @id @default(cuid())
+  organizationId String
+  actorId        String
+  leadIds        Json
+  approvedCount  Int
+  skippedCount   Int
+  skippedReasons Json?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User          @relation(fields: [actorId], references: [id], onDelete: Cascade)
+}
+
+model AuditEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  actorId        String?
+  entityType     String
+  entityId       String
+  action         String
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+}
