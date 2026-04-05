@@ -4,6 +4,7 @@ import { StatusPill } from "@/components/status-pill";
 import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationUsers } from "@/lib/data";
+import { getInviteDeliveryConfig } from "@/lib/invite-config";
 import { canManageUsers } from "@/lib/permissions";
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
@@ -18,6 +19,7 @@ export default async function UsersPage() {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const inviteConfig = getInviteDeliveryConfig();
   const formatter = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -109,6 +111,36 @@ export default async function UsersPage() {
             If email delivery is configured, Xelera will send the activation link automatically. Otherwise the
             link will still be generated here for manual sharing.
           </p>
+          <div className="mt-5 rounded-[28px] border border-slate-800 bg-slate-900/70 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Invite Delivery Readiness</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl bg-slate-950/80 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Automatic Send</p>
+                <p className="mt-2 text-sm font-semibold text-white">
+                  {inviteConfig.automaticDeliveryReady ? "Ready" : "Waiting on RESEND_API_KEY"}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-950/80 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">From Address</p>
+                <p className="mt-2 text-sm font-semibold text-white">{inviteConfig.fromEmail}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-950/80 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Activation Base URL</p>
+                <p className="mt-2 break-all text-sm font-semibold text-white">{inviteConfig.appUrl}</p>
+              </div>
+            </div>
+            {!inviteConfig.automaticDeliveryReady ? (
+              <p className="mt-4 text-sm leading-7 text-slate-300">
+                Add `RESEND_API_KEY` in Vercel to enable real invite emails. Until then, the app will keep
+                generating secure links for manual sharing.
+              </p>
+            ) : null}
+            {inviteConfig.usingFallbackAppUrl ? (
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                `NEXT_PUBLIC_APP_URL` is not set, so activation links fall back to the current deployment URL.
+              </p>
+            ) : null}
+          </div>
           {canManageUsers(user.role) ? (
             <form action={createUserInviteAction} className="mt-6 space-y-4">
               <input
