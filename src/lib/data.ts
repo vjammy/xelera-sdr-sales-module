@@ -326,6 +326,7 @@ export async function getDashboardData(user: {
     outcomeHref: string;
     severityLabel?: string;
     severityTone?: "warning" | "neutral";
+    severityHref?: string;
     detailLabel?: string;
     detailHref?: string;
     recipientSummary?: string;
@@ -401,10 +402,16 @@ export async function getDashboardData(user: {
         event.action === "sent"
           ? "/admin/digests?state=sent"
           : event.action === "skipped"
-          ? "/admin/digests?state=skipped"
-            : `/admin/digests?state=${event.action}`,
+            ? "/admin/digests?state=skipped"
+              : `/admin/digests?state=${event.action}`,
         severityLabel: highestSeverity?.label,
         severityTone: highestSeverity?.tone,
+        severityHref:
+          highestSeverity?.label === "Highest severity: Delivery failed"
+            ? "/admin/digests?state=failed"
+            : highestSeverity?.label === "Highest severity: Manual fallback"
+              ? "/admin/digests?state=manual"
+              : undefined,
         ...(event.action === "manual" || event.action === "failed"
         ? (() => {
             const attentionRecipients = recipientDeliveries

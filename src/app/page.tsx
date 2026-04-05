@@ -303,13 +303,24 @@ export default async function Home() {
                   </Link>
                   {item.severityLabel && item.severityTone ? (
                     <div className="mt-2">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getSeverityBadgeClasses(
-                          item.severityTone,
-                        )}`}
-                      >
-                        {item.severityLabel}
-                      </span>
+                      {item.severityHref ? (
+                        <Link
+                          href={item.severityHref}
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] transition hover:opacity-85 ${getSeverityBadgeClasses(
+                            item.severityTone,
+                          )}`}
+                        >
+                          {item.severityLabel}
+                        </Link>
+                      ) : (
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getSeverityBadgeClasses(
+                            item.severityTone,
+                          )}`}
+                        >
+                          {item.severityLabel}
+                        </span>
+                      )}
                     </div>
                   ) : null}
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
