@@ -326,10 +326,22 @@ export async function getDashboardData(user: {
               .filter((email): email is string => Boolean(email));
 
             if (attentionRecipients.length === 1) {
+              const matchingDelivery = recipientDeliveries.find(
+                (delivery) =>
+                  (delivery.deliveryState === "manual" || delivery.deliveryState === "failed") &&
+                  delivery.email === attentionRecipients[0],
+              );
+              const deliveryLabel =
+                matchingDelivery?.deliveryState === "failed"
+                  ? "Delivery failed"
+                  : matchingDelivery?.deliveryState === "manual"
+                    ? "Manual fallback"
+                    : "Needs attention";
+
               return {
                 detailLabel: "Open affected recipient",
                 detailHref: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
-                recipientSummary: `Affected recipient: ${attentionRecipients[0]}`,
+                recipientSummary: `Affected recipient: ${attentionRecipients[0]} - ${deliveryLabel}`,
               };
             }
 

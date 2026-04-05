@@ -751,7 +751,7 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.goto("/");
   const recipientActivity = page.locator("[data-dashboard-invite-activity]");
   await expect(recipientActivity).toContainText(/Manual follow-up required|Completed|No action needed/);
-  await expect(recipientActivity).toContainText("Affected recipient: ava.manager@xelera.ai");
+  await expect(recipientActivity).toContainText(/Affected recipient: ava\.manager@xelera\.ai - (Manual fallback|Delivery failed)/);
   await recipientActivity.getByRole("link", { name: "Open affected recipient" }).first().click();
   await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
