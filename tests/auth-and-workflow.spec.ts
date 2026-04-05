@@ -8,6 +8,15 @@ async function login(page: import("@playwright/test").Page, email: string) {
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 }
 
+async function switchUser(page: import("@playwright/test").Page, email: string) {
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("Welcome123!");
+  await page.getByRole("button", { name: "Enter workspace" }).click();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+}
+
 async function createLeadList(page: import("@playwright/test").Page, uniqueSuffix: string) {
   const listName = `Playwright Event List ${uniqueSuffix}`;
   const csv = [
@@ -37,6 +46,13 @@ async function createLeadList(page: import("@playwright/test").Page, uniqueSuffi
   await expect(page.getByRole("heading", { name: listName })).toBeVisible();
 
   return listName;
+}
+
+async function openLeadDetailFromList(page: import("@playwright/test").Page, listName: string, index = 0) {
+  await page.goto("/lists");
+  await page.getByRole("link", { name: listName }).click();
+  await expect(page.getByRole("heading", { name: listName })).toBeVisible();
+  await page.getByRole("link", { name: "Open detail" }).nth(index).click();
 }
 
 test("sales manager can log in and see dashboard plus bulk approval controls", async ({ page }) => {
@@ -88,4 +104,44 @@ test("manager can upload a fresh list, see validation results, run drafting, and
   await page.goto("/lists");
   await page.getByRole("link", { name: listName }).click();
   await expect(page.getByText("Fully Approved").first()).toBeVisible();
+});
+
+test("salesperson can manually edit, regenerate, pause, reject, and approve within the review workflow", async ({
+  page,
+}) => {
+  const listName = `Playwright Review Loop ${Date.now()}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await createLeadList(page, listName.replace(/\s+/g, "-"));
+  await page.getByRole("button", { name: "Run research and drafting" }).click();
+  await expect(page.getByRole("link", { name: "Open detail" }).first()).toBeVisible({ timeout: 15000 });
+
+  await switchUser(page, "leo.rep@xelera.ai");
+
+  await openLeadDetailFromList(page, `Playwright Event List ${listName.replace(/\s+/g, "-")}`, 0);
+
+  const editedSubject = `Edited subject ${Date.now()}`;
+  await page.locator('input[name="subject_1"]').fill(editedSubject);
+  await page.getByRole("button", { name: "Save manual edits" }).click();
+  await expect(page.locator('input[name="subject_1"]')).toHaveValue(editedSubject);
+
+  const regenerateOnePrompt = "Make email 1 softer and more technical for RevOps.";
+  await page.locator('input[name="prompt_1"]').fill(regenerateOnePrompt);
+  await page.getByRole("button", { name: "Regenerate this email" }).first().click();
+  await expect(page.getByText(`regenerate one · ${regenerateOnePrompt}`)).toBeVisible({ timeout: 10000 });
+
+  const regenerateAllPrompt = "Make all 3 emails shorter, sharper, and more operational.";
+  await page.locator('textarea[name="prompt"]').fill(regenerateAllPrompt);
+  await page.getByRole("button", { name: "Regenerate all" }).click();
+  await expect(page.getByText(`regenerate all · ${regenerateAllPrompt}`)).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole("button", { name: "Pause" }).click();
+  await expect(page.getByText("Paused").first()).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole("button", { name: "Reject" }).click();
+  await expect(page.getByText("Rejected").first()).toBeVisible({ timeout: 10000 });
+
+  await openLeadDetailFromList(page, `Playwright Event List ${listName.replace(/\s+/g, "-")}`, 1);
+  await page.getByRole("button", { name: "Approve full sequence" }).click();
+  await expect(page.getByText("Approved").first()).toBeVisible({ timeout: 10000 });
 });
