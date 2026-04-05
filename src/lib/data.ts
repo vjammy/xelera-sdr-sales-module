@@ -118,6 +118,8 @@ async function getInviteDigestRecipientIssueState(organizationId: string) {
       const recentAttentionRuns = history.filter(
         (entry) => entry.deliveryState === "manual" || entry.deliveryState === "failed",
       ).length;
+      const manualRunCount = history.filter((entry) => entry.deliveryState === "manual").length;
+      const failedRunCount = history.filter((entry) => entry.deliveryState === "failed").length;
       let currentAttentionStreak = 0;
 
       for (const entry of history) {
@@ -142,6 +144,8 @@ async function getInviteDigestRecipientIssueState(organizationId: string) {
         email,
         {
           recentAttentionRuns,
+          manualRunCount,
+          failedRunCount,
           currentAttentionStreak,
           reviewState:
             needsAttention && reviewCoversLatestIssue
@@ -156,6 +160,23 @@ async function getInviteDigestRecipientIssueState(organizationId: string) {
       ];
     }),
   );
+}
+
+function formatRecipientAttentionCounts(issueState: {
+  manualRunCount?: number;
+  failedRunCount?: number;
+}) {
+  const parts: string[] = [];
+
+  if ((issueState.manualRunCount ?? 0) > 0) {
+    parts.push(`${issueState.manualRunCount}x fallback`);
+  }
+
+  if ((issueState.failedRunCount ?? 0) > 0) {
+    parts.push(`${issueState.failedRunCount}x failed`);
+  }
+
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }
 
 export async function getDashboardData(user: {
@@ -358,7 +379,9 @@ export async function getDashboardData(user: {
                 recipientLinks: reviewLabel
                   ? [
                       {
-                        label: `${reviewLabel}: ${attentionRecipients[0]}`,
+                        label: `${reviewLabel}: ${attentionRecipients[0]}${formatRecipientAttentionCounts(
+                          inviteDigestRecipientIssueState.get(attentionRecipients[0]) ?? {},
+                        )}`,
                         href: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
                       },
                     ]
@@ -393,11 +416,15 @@ export async function getDashboardData(user: {
 
               const recipientLinks = [
                 ...reviewedRecipients.slice(0, 2).map((email) => ({
-                  label: `Reviewed: ${email}`,
+                  label: `Reviewed: ${email}${formatRecipientAttentionCounts(
+                    inviteDigestRecipientIssueState.get(email) ?? {},
+                  )}`,
                   href: `/admin/digests/recipient?email=${encodeURIComponent(email)}`,
                 })),
                 ...activeRecipients.slice(0, 2).map((email) => ({
-                  label: `Needs review: ${email}`,
+                  label: `Needs review: ${email}${formatRecipientAttentionCounts(
+                    inviteDigestRecipientIssueState.get(email) ?? {},
+                  )}`,
                   href: `/admin/digests/recipient?email=${encodeURIComponent(email)}`,
                 })),
               ];

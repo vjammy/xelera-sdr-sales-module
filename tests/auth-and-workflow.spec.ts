@@ -717,7 +717,11 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(reviewedRecipientActivity).toContainText(
     /Affected recipients: .*ava\.manager@xelera\.ai.* - Reviewed: ava\.manager@xelera\.ai/,
   );
-  await reviewedRecipientActivity.getByRole("link", { name: "Reviewed: ava.manager@xelera.ai" }).first().click();
+  await expect(reviewedRecipientActivity).toContainText(/Reviewed: ava\.manager@xelera\.ai \(\d+x (fallback|failed)/);
+  await reviewedRecipientActivity
+    .getByRole("link", { name: /Reviewed: ava\.manager@xelera\.ai \(\d+x (fallback|failed)/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-recipient-reviewed-banner]")).toContainText("Reviewed after repeated issues");
   await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
@@ -765,7 +769,11 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(recipientActivity).toContainText(
     /Affected recipient: ava\.manager@xelera\.ai - (Manual fallback|Delivery failed) - Needs review/,
   );
-  await recipientActivity.getByRole("link", { name: "Needs review: ava.manager@xelera.ai" }).first().click();
+  await expect(recipientActivity).toContainText(/Needs review: ava\.manager@xelera\.ai \(\d+x (fallback|failed)/);
+  await recipientActivity
+    .getByRole("link", { name: /Needs review: ava\.manager@xelera\.ai \(\d+x (fallback|failed)/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
   await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
   await page.goto("/");
