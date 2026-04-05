@@ -1,6 +1,7 @@
+import { getInviteHygieneAlerts } from "@/lib/invite-hygiene";
 import { canViewAllWork } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { expireInviteIfNeeded, isInviteStale } from "@/lib/invites";
+import { expireInviteIfNeeded } from "@/lib/invites";
 
 export async function getDashboardData(user: {
   id: string;
@@ -39,35 +40,10 @@ export async function getDashboardData(user: {
     }),
   ]);
 
-  const stalePendingInvites =
+  const inviteHygiene =
     user.role === "sales_manager" || user.role === "admin_operator"
-      ? await prisma.userInvite.findMany({
-          where: {
-            organizationId: user.organizationId,
-            status: "pending",
-          },
-          orderBy: [{ lastDeliveryAttemptAt: "asc" }, { createdAt: "asc" }],
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-              },
-            },
-          },
-        })
-      : [];
-
-  const staleInviteAlerts = stalePendingInvites
-    .filter((invite) =>
-      isInviteStale({
-        createdAt: invite.createdAt,
-        lastDeliveryAttemptAt: invite.lastDeliveryAttemptAt,
-      }),
-    )
-    .slice(0, 5);
+      ? await getInviteHygieneAlerts(user.organizationId)
+      : { staleAlerts: [], expiringSoonAlerts: [], alerts: [] };
 
   return {
     leadLists,
@@ -79,7 +55,8 @@ export async function getDashboardData(user: {
       researchCompleteCount: metrics[4],
       activeProductCount: products,
     },
-    staleInviteAlerts,
+    staleInviteAlerts: inviteHygiene.staleAlerts.slice(0, 5),
+    expiringSoonInviteAlerts: inviteHygiene.expiringSoonAlerts.slice(0, 5),
   };
 }
 

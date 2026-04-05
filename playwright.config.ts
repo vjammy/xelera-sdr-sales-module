@@ -20,6 +20,7 @@ export default defineConfig({
       AUTH_SECRET: "xelera-sdr-local-secret-2026",
       AUTH_TRUST_HOST: "true",
       NEXTAUTH_URL: "http://localhost:3000",
+      CRON_SECRET: "xelera-cron-secret-2026",
     },
   },
   projects: [

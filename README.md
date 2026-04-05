@@ -24,6 +24,7 @@ Workflow-first SDR application for turning event lead lists into researched, hum
 1. Copy `.env.example` to `.env` and provide a valid `DATABASE_URL` and `AUTH_SECRET`.
    For invite delivery, also set `NEXT_PUBLIC_APP_URL` and optionally `INVITE_FROM_EMAIL`.
    Add `RESEND_API_KEY` when you want the app to send invite emails automatically.
+   Add `CRON_SECRET` to protect scheduled invite hygiene runs.
 2. Install dependencies:
 
 ```bash
@@ -69,5 +70,7 @@ npm run db:seed
 - Add `NEXT_PUBLIC_APP_URL` with your production URL so invite links always point to the canonical host.
 - Add `INVITE_FROM_EMAIL` to control the sender name/address for invite emails.
 - Add `RESEND_API_KEY` to turn on automatic invite delivery. Without it, admins can still manually share the generated invite links.
+- Add `CRON_SECRET` so the scheduled invite hygiene route at `/api/cron/invite-hygiene` can run safely.
+- `vercel.json` schedules the invite hygiene digest daily at `13:00 UTC`, which is `9:00 AM` Eastern during daylight saving time.
 - Run `npm run db:push` and `npm run db:seed` against the target Neon database before first production use.
 - The included auth flow is intended for an MVP/internal pilot. If you later need customer-facing SaaS auth, swap the credentials flow for a managed provider.

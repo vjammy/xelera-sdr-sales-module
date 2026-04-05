@@ -511,3 +511,51 @@ test("manager dashboard flags pending invites that have gone stale", async ({ pa
   await expect(page.locator(`[data-stale-invite-email="${email}"]`)).toContainText(email);
   await expect(page.getByRole("link", { name: "Open user onboarding" })).toBeVisible();
 });
+
+test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `digest.rep.${suffix}@xelera.ai`;
+  const name = `Digest Rep ${suffix}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(name);
+  await page.getByPlaceholder("Work email").fill(email);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0133");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+
+  await expect(page.locator(`a[data-invite-email="${email}"]`).first()).toBeVisible();
+  await makeLatestInviteStale(email);
+
+  const response = await page.request.get("/api/cron/invite-hygiene", {
+    headers: {
+      authorization: "Bearer xelera-cron-secret-2026",
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as {
+    organizationsProcessed: number;
+    results: Array<{
+      organizationName: string;
+      alertCount: number;
+      staleCount: number;
+      expiringSoonCount: number;
+      recipients: string[];
+      deliveryState: string;
+    }>;
+  };
+
+  expect(payload.organizationsProcessed).toBeGreaterThan(0);
+  expect(
+    payload.results.some(
+      (result) =>
+        result.alertCount > 0 &&
+        result.staleCount > 0 &&
+        result.recipients.includes("ava.manager@xelera.ai"),
+    ),
+  ).toBeTruthy();
+});

@@ -86,7 +86,7 @@ export default async function Home() {
                 const lastTouchedAt = invite.lastDeliveryAttemptAt ?? invite.createdAt;
                 return (
                   <article
-                    key={invite.id}
+                    key={invite.inviteId}
                     data-stale-invite-email={invite.user.email}
                     className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-4"
                   >
