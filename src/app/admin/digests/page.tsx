@@ -44,6 +44,33 @@ function getRetryOutcomeLabel(args: {
   return "Skipped on retry";
 }
 
+function getRecipientIssueBadge(delivery: {
+  issueState: string;
+  recentAttentionRuns: number;
+  currentAttentionStreak: number;
+  reviewActorName: string | null;
+  reviewActorEmail: string | null;
+  reviewCreatedAt: Date | null;
+}) {
+  if (delivery.issueState === "active_issue") {
+    return {
+      label: "Unresolved repeated issue",
+      detail: `${delivery.recentAttentionRuns} attention runs, streak ${delivery.currentAttentionStreak}`,
+      className: "bg-amber-100 text-amber-950",
+    };
+  }
+
+  if (delivery.issueState === "reviewed") {
+    return {
+      label: "Reviewed issue",
+      detail: `${delivery.reviewActorName ?? delivery.reviewActorEmail ?? "Manager"} reviewed it`,
+      className: "bg-emerald-100 text-emerald-950",
+    };
+  }
+
+  return null;
+}
+
 export default async function DigestOpsPage(props: {
   searchParams?: Promise<{ state?: string; recipient?: string; page?: string }>;
 }) {
@@ -313,7 +340,10 @@ export default async function DigestOpsPage(props: {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {entry.recipientDeliveries.map((delivery) => (
+                        {entry.recipientDeliveries.map((delivery) => {
+                          const issueBadge = getRecipientIssueBadge(delivery);
+
+                          return (
                           <tr key={delivery.id}>
                             <td className="px-4 py-3 text-slate-700">
                               <Link
@@ -322,6 +352,16 @@ export default async function DigestOpsPage(props: {
                               >
                                 {delivery.email}
                               </Link>
+                              {issueBadge ? (
+                                <div className="mt-2">
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${issueBadge.className}`}
+                                  >
+                                    {issueBadge.label}
+                                  </span>
+                                  <p className="mt-1 text-xs text-slate-500">{issueBadge.detail}</p>
+                                </div>
+                              ) : null}
                             </td>
                             <td className="px-4 py-3 text-slate-700">
                               <div>{delivery.deliveryState.replaceAll("_", " ")}</div>
@@ -342,7 +382,8 @@ export default async function DigestOpsPage(props: {
                               {delivery.alertCount} total · {delivery.staleCount} stale · {delivery.expiringSoonCount} soon
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

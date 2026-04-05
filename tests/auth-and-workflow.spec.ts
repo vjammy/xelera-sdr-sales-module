@@ -37,24 +37,6 @@ async function switchUser(page: Page, email: string, password = "Welcome123!") {
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible({ timeout: 15000 });
 }
 
-async function signOutToLogin(page: Page) {
-  const signOutButton = page.getByRole("button", { name: "Sign out" });
-
-  if (await signOutButton.isVisible().catch(() => false)) {
-    await Promise.allSettled([
-      page.waitForURL(/\/login/, { timeout: 15000 }),
-      signOutButton.click(),
-    ]);
-  }
-
-  if (!/\/login/.test(page.url())) {
-    await page.context().clearCookies().catch(() => undefined);
-    await page.goto("/login");
-  }
-
-  await expect(page).toHaveURL(/\/login/);
-}
-
 async function createLeadList(page: import("@playwright/test").Page, uniqueSuffix: string) {
   const listName = `Playwright Event List ${uniqueSuffix}`;
   const csv = [
@@ -600,6 +582,10 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.getByRole("button", { name: "Mark issue reviewed" }).click();
   await expect(page.locator("[data-recipient-reviewed-banner]")).toContainText("Reviewed after repeated issues");
   await expect(page.getByRole("button", { name: "Reopen issue" })).toBeVisible();
+  await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
+  await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-digest-ops-history]")).toContainText("Reviewed issue");
+  await page.goto("/admin/digests/recipient?email=ava.manager%40xelera.ai");
   await page.getByRole("button", { name: "Reopen issue" }).click();
   await expect(page.locator("[data-recipient-attention-banner]")).toContainText("Needs repeated attention");
   await expect(page.locator("[data-recipient-digest-history]")).toContainText(
@@ -617,6 +603,7 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await page.goto("/admin/digests/recipient?email=ava.manager%40xelera.ai");
   await page.getByRole("link", { name: "Back to filtered digest runs" }).click();
   await expect(page).toHaveURL(/\/admin\/digests\?recipient=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-digest-ops-history]")).toContainText("Unresolved repeated issue");
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
   await page.getByRole("button", { name: "Run digest now" }).click();
