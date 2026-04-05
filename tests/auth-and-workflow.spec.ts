@@ -846,6 +846,11 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(setupChecklist).toContainText("Configure outbound delivery");
   await expect(setupChecklist).toContainText("Configure research and drafting provider");
   await expect(setupChecklist).toContainText("On Hobby, outbound processing is limited to a daily cron schedule");
+  await expect(setupChecklist).toContainText("Verify auth email delivery");
+  await expect(setupChecklist).toContainText("Verify outbound delivery");
+  await expect(setupChecklist).toContainText("Verify AI generation");
+  await expect(setupChecklist).toContainText("Verify protected cron behavior");
+  await expect(setupChecklist).toContainText("Call the cron route with the configured bearer token");
 
   await page.goto("/");
   const dashboardReadiness = page.locator("[data-dashboard-provider-readiness]");

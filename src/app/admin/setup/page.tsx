@@ -116,6 +116,20 @@ export default async function SetupPage() {
                     ))}
                   </div>
                 ) : null}
+                {item.verificationSteps?.length ? (
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      {item.verificationTitle ?? "Verify after setup"}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {item.verificationSteps.map((step, index) => (
+                        <p key={`${item.key}-verify-${index}`} className="text-sm leading-6 text-slate-700">
+                          {index + 1}. {step}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>

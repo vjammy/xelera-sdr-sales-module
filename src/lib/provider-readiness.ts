@@ -11,6 +11,8 @@ export type ProviderReadinessItem = {
   actionHref?: string;
   setupTitle?: string;
   setupSteps?: string[];
+  verificationTitle?: string;
+  verificationSteps?: string[];
 };
 
 function hasEnv(name: string) {
@@ -49,6 +51,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         "Set AUTH_FROM_EMAIL to the sender address you want for magic-link sign-in.",
         "Redeploy production after updating email provider credentials.",
       ],
+      verificationTitle: "Verify auth email delivery",
+      verificationSteps: [
+        "Open the production login page and use Email me a sign-in link for a test inbox you control.",
+        "Confirm the sign-in link email arrives from the expected sender identity.",
+        "Use the link to complete a successful sign-in and confirm the user lands on the dashboard.",
+      ],
     },
     {
       key: "outbound_email",
@@ -71,6 +79,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         "Set OUTBOUND_FROM_EMAIL to the verified sender identity for SDR sequences.",
         "Use Send Ops to process the queue once the provider is configured.",
       ],
+      verificationTitle: "Verify outbound delivery",
+      verificationSteps: [
+        "Queue an approved sequence from a test lead in the app.",
+        "Run Process outbound queue now from Send Ops or wait for the daily cron window.",
+        "Confirm the first email moves to Sent and the provider message flow reaches the target inbox.",
+      ],
     },
     {
       key: "ai_generation",
@@ -92,6 +106,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         "Add AI_API_KEY for that provider in Vercel.",
         "Optionally set AI_MODEL and AI_BASE_URL if you need a non-default model or compatible endpoint.",
       ],
+      verificationTitle: "Verify AI generation",
+      verificationSteps: [
+        "Run research and drafting on a fresh lead list after redeploying.",
+        "Open a lead detail and confirm the copy is no longer the mock baseline style.",
+        "Check that provider-backed research and draft metadata are being recorded in the workflow history.",
+      ],
     },
     {
       key: "cron_protection",
@@ -110,6 +130,12 @@ export function getProviderReadiness(): ProviderReadinessItem[] {
         "Set CRON_SECRET in Vercel for every environment that should run protected cron routes.",
         "Keep the bearer secret consistent with any manual operational scripts you use.",
         "On Hobby, outbound processing is limited to a daily cron schedule, so use Send Ops for manual runs between scheduled executions.",
+      ],
+      verificationTitle: "Verify protected cron behavior",
+      verificationSteps: [
+        "Call the cron route with the configured bearer token and confirm it returns HTTP 200.",
+        "Confirm the same route returns HTTP 401 without the secret.",
+        "Check recent send or invite activity in the app to make sure the route is affecting real workflow state.",
       ],
     },
   ];
