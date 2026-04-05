@@ -9,6 +9,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { deliverInviteEmail } from "@/lib/email";
 import { parseLeadFile } from "@/lib/importer";
+import { expireInviteIfNeeded, expireStaleInvitesForOrganization } from "@/lib/invites";
 import { canBulkApprove, canManageProducts, canManageUsers } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import {
@@ -70,6 +71,18 @@ async function attemptInviteDelivery(args: {
     throw new Error("This invite is no longer eligible for delivery.");
   }
 
+  const expired = await expireInviteIfNeeded({
+    inviteId: invite.id,
+    organizationId: invite.organizationId,
+    email: invite.user.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  });
+
+  if (expired) {
+    throw new Error("This invite has expired and must be replaced.");
+  }
+
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
@@ -119,6 +132,8 @@ async function createInviteForExistingUser(args: {
   actorName: string;
   actorEmail: string;
 }) {
+  await expireStaleInvitesForOrganization(args.organizationId);
+
   const targetUser = await prisma.user.findFirst({
     where: {
       id: args.userId,
@@ -568,6 +583,18 @@ export async function revokeUserInviteAction(inviteId: string) {
     throw new Error("This invite is no longer eligible for revocation.");
   }
 
+  const expired = await expireInviteIfNeeded({
+    inviteId: invite.id,
+    organizationId: invite.organizationId,
+    email: invite.user.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  });
+
+  if (expired) {
+    throw new Error("This invite has already expired.");
+  }
+
   await prisma.$transaction([
     prisma.userInvite.update({
       where: { id: invite.id },
@@ -633,14 +660,15 @@ export async function completeInviteActivationAction(token: string, formData: Fo
     redirect(`/activate/${token}?error=${encodeURIComponent("This activation link is no longer valid.")}`);
   }
 
-  if (invite.expiresAt <= new Date()) {
-    await prisma.userInvite.update({
-      where: { id: invite.id },
-      data: {
-        status: "expired",
-      },
-    });
+  const expired = await expireInviteIfNeeded({
+    inviteId: invite.id,
+    organizationId: invite.organizationId,
+    email: invite.user.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  });
 
+  if (expired) {
     redirect(`/activate/${token}?error=${encodeURIComponent("This activation link has expired.")}`);
   }
 

@@ -5,6 +5,7 @@ import { WorkspaceShell } from "@/components/workspace-shell";
 import { requireUser } from "@/lib/auth";
 import { getOrganizationUsers } from "@/lib/data";
 import { getInviteDeliveryConfig } from "@/lib/invite-config";
+import { expireStaleInvitesForOrganization } from "@/lib/invites";
 import { canManageUsers } from "@/lib/permissions";
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
@@ -15,6 +16,7 @@ const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
 
 export default async function UsersPage() {
   const user = await requireUser();
+  await expireStaleInvitesForOrganization(user.organizationId);
   const users = await getOrganizationUsers(user.organizationId);
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
@@ -138,6 +140,11 @@ export default async function UsersPage() {
                       <p className="mt-3 leading-7 text-slate-600">
                         The latest activation link is no longer usable. Issue a replacement invite to rotate the link
                         without recreating the user.
+                      </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                        {latestInvite.status === "expired"
+                          ? `Expired ${formatter.format(latestInvite.expiresAt)}`
+                          : `Updated ${formatter.format(latestInvite.updatedAt)}`}
                       </p>
                       {canManageUsers(user.role) ? (
                         <form action={createReplacementInviteAction.bind(null, member.id)} className="mt-4">

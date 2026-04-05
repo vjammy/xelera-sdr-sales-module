@@ -1,4 +1,11 @@
+import { PrismaClient } from "@prisma/client";
 import { expect, test, type Page } from "@playwright/test";
+
+const db = new PrismaClient();
+
+test.afterAll(async () => {
+  await db.$disconnect();
+});
 
 async function login(page: Page, email: string, password = "Welcome123!") {
   await page.goto("/login");
@@ -60,6 +67,31 @@ async function openLeadDetailFromList(page: import("@playwright/test").Page, lis
   await page.getByRole("link", { name: "Open detail" }).nth(index).click();
 }
 
+async function expireLatestInviteForEmail(email: string) {
+  const invite = await db.userInvite.findFirst({
+    where: {
+      status: "pending",
+      user: {
+        email,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (!invite) {
+    throw new Error(`Expected a pending invite for ${email}.`);
+  }
+
+  await db.userInvite.update({
+    where: { id: invite.id },
+    data: {
+      expiresAt: new Date(Date.now() - 60_000),
+    },
+  });
+}
+
 test("sales manager can log in and see dashboard plus bulk approval controls", async ({ page }) => {
   await login(page, "ava.manager@xelera.ai");
 
@@ -71,8 +103,9 @@ test("sales manager can log in and see dashboard plus bulk approval controls", a
   await expect(page.getByRole("heading", { name: "Lead lists and batch review readiness" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Bulk approve selected" }).first()).toBeVisible();
 
-  await page.getByRole("link", { name: "SaaStr Annual Follow-up" }).click();
-  await expect(page.getByRole("heading", { name: "SaaStr Annual Follow-up" })).toBeVisible();
+  const firstListLink = page.locator('article a[href^="/lists/"]').first();
+  await firstListLink.click();
+  await expect(page).toHaveURL(/\/lists\/[^/]+$/);
   await expect(page.getByRole("button", { name: "Run research and drafting" })).toBeVisible();
 });
 
@@ -271,6 +304,63 @@ test("manager can create a replacement invite after revocation and the new link 
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
+
+  await page.goto(replacementUrl);
+  await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();
+  await page.locator('input[name="password"]').fill(password);
+  await page.locator('input[name="confirmPassword"]').fill(password);
+  await page.getByRole("button", { name: "Activate and continue" }).click();
+  await expect(page.getByText("Your invite is active. Sign in with your new password.")).toBeVisible({
+    timeout: 10000,
+  });
+
+  await login(page, email, password);
+  await expect(page.getByText("Core Flow")).toBeVisible();
+});
+
+test("manager can rotate an expired invite into a fresh activation link", async ({ page }) => {
+  const suffix = Date.now();
+  const email = `expired.rep.${suffix}@xelera.ai`;
+  const name = `Expired Rep ${suffix}`;
+  const password = `ExpiredPass!${suffix}`;
+
+  await login(page, "ava.manager@xelera.ai");
+  await page.goto("/admin/users");
+
+  await page.getByPlaceholder("Full name").fill(name);
+  await page.getByPlaceholder("Work email").fill(email);
+  await page.locator('select[name="role"]').selectOption("salesperson");
+  await page.getByPlaceholder("Job title").fill("SDR");
+  await page.getByPlaceholder("Phone").fill("+1 646-555-0166");
+  await page.getByRole("button", { name: "Create activation invite" }).click();
+
+  const originalLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  const originalUrl = await originalLink.getAttribute("href");
+  if (!originalUrl) {
+    throw new Error("Expected an original activation URL.");
+  }
+
+  await expireLatestInviteForEmail(email);
+  await page.goto("/admin/users");
+
+  const expiredCard = page.locator(`[data-user-email="${email}"]`).first();
+  await expect(expiredCard).toContainText("No active invite");
+  await expect(expiredCard).toContainText("Last invite expired");
+
+  await expiredCard.getByRole("button", { name: "Create replacement invite" }).click();
+
+  const replacementLink = page.locator(`a[data-invite-email="${email}"]`).first();
+  await expect(replacementLink).toBeVisible();
+  const replacementUrl = await replacementLink.getAttribute("href");
+  if (!replacementUrl || replacementUrl === originalUrl) {
+    throw new Error("Expected a fresh replacement activation URL after expiry.");
+  }
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await page.goto(originalUrl);
+  await expect(page.getByRole("heading", { name: "This invite is no longer active" })).toBeVisible();
 
   await page.goto(replacementUrl);
   await expect(page.getByRole("heading", { name: "Finish your workspace activation." })).toBeVisible();

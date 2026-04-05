@@ -1,5 +1,6 @@
 import { canViewAllWork } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { expireInviteIfNeeded } from "@/lib/invites";
 
 export async function getDashboardData(user: {
   id: string;
@@ -200,12 +201,17 @@ export async function getInviteByToken(token: string) {
     return invite;
   }
 
-  if (invite.expiresAt <= new Date()) {
-    return prisma.userInvite.update({
+  const expired = await expireInviteIfNeeded({
+    inviteId: invite.id,
+    organizationId: invite.organizationId,
+    email: invite.user.email,
+    status: invite.status,
+    expiresAt: invite.expiresAt,
+  });
+
+  if (expired) {
+    return prisma.userInvite.findUnique({
       where: { id: invite.id },
-      data: {
-        status: "expired",
-      },
       include: {
         user: true,
         invitedBy: true,
