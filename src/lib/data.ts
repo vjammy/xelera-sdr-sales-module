@@ -326,7 +326,7 @@ export async function getDashboardData(user: {
 
             if (attentionRecipients.length === 1) {
               return {
-                detailLabel: "Open recipient",
+                detailLabel: "Open affected recipient",
                 detailHref: `/admin/digests/recipient?email=${encodeURIComponent(attentionRecipients[0])}`,
               };
             }

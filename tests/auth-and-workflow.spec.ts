@@ -748,8 +748,17 @@ test("invite hygiene cron endpoint summarizes alerts for managers", async ({ pag
   await expect(dashboardIssueSummary).toContainText("Reviewed Recipient Issues");
   await dashboardIssueSummary.getByRole("link", { name: /Unresolved Recipient Issues/i }).click();
   await expect(page).toHaveURL(/\/admin\/digests\?issue=active_issue/);
+  await page.goto("/");
+  const recipientActivity = page.locator("[data-dashboard-invite-activity]");
+  await expect(recipientActivity).toContainText(/Manual follow-up required|Completed|No action needed/);
+  await recipientActivity.getByRole("link", { name: "Open affected recipient" }).first().click();
+  await expect(page).toHaveURL(/\/admin\/digests\/recipient\?email=ava\.manager%40xelera\.ai/);
+  await expect(page.locator("[data-recipient-digest-history]")).toContainText(
+    /Manual fallback|Emailed successfully|Delivery failed|Skipped/,
+  );
 
   const digestCountBeforeManualRun = await countInviteDigestEvents();
+  await page.goto("/admin/digests?issue=active_issue");
   await page.getByRole("button", { name: "Run digest now" }).click();
   await expect
     .poll(async () => await countInviteDigestEvents())
