@@ -107,6 +107,32 @@ export default async function SetupHistoryPage(props: {
     searchParams.actor && actorOptions.some((option) => option.value === searchParams.actor)
       ? searchParams.actor
       : "all";
+  const presets = [
+    {
+      label: "All events",
+      providerFilter: "all",
+      actionFilter: "all",
+      actorFilter: "all",
+    },
+    {
+      label: "Reopened events",
+      providerFilter: "all",
+      actionFilter: "reopened",
+      actorFilter: "all",
+    },
+    {
+      label: "Verified events",
+      providerFilter: "all",
+      actionFilter: "verified",
+      actorFilter: "all",
+    },
+    {
+      label: "My changes",
+      providerFilter: "all",
+      actionFilter: "all",
+      actorFilter: user.email,
+    },
+  ];
   const providerActorScopedHistory = history.filter((event) => {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
@@ -281,6 +307,34 @@ export default async function SetupHistoryPage(props: {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-900">Reopened</p>
                   <p className="mt-1 text-xl font-semibold text-slate-950">{actionSummary.reopened}</p>
                 </Link>
+              </div>
+              <div className="flex flex-wrap gap-2" data-setup-history-presets>
+                {presets.map((preset) => {
+                  const isActive =
+                    preset.providerFilter === providerFilter &&
+                    preset.actionFilter === actionFilter &&
+                    preset.actorFilter === actorFilter;
+
+                  return (
+                    <Link
+                      key={preset.label}
+                      href={buildHistoryHref({
+                        providerFilter: preset.providerFilter,
+                        actionFilter: preset.actionFilter,
+                        actorFilter: preset.actorFilter,
+                        page: 1,
+                      })}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {preset.label}
+                    </Link>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap gap-2" data-provider-history-actor-filters>
                 <Link
