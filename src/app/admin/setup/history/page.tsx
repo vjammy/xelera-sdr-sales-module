@@ -28,7 +28,8 @@ const SORT_FILTERS = [
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
 ] as const;
-const SETUP_HISTORY_PER_PAGE = 8;
+const PAGE_SIZE_OPTIONS = [8, 20, 50] as const;
+const DEFAULT_PAGE_SIZE = 8;
 
 function getStatusBadgeClasses(action: string) {
   if (action === "verified") {
@@ -64,12 +65,19 @@ function normalizePageNumber(value: string | undefined) {
   return parsed;
 }
 
+function normalizePageSize(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? String(DEFAULT_PAGE_SIZE), 10);
+
+  return PAGE_SIZE_OPTIONS.includes(parsed as (typeof PAGE_SIZE_OPTIONS)[number]) ? parsed : DEFAULT_PAGE_SIZE;
+}
+
 function buildHistoryHref(args: {
   providerFilter: string;
   actionFilter: string;
   actorFilter: string;
   timeFilter: string;
   sortOrder: string;
+  pageSize: number;
   page?: number;
   exportPath?: boolean;
   exportScope?: "page" | "all";
@@ -96,6 +104,10 @@ function buildHistoryHref(args: {
     params.set("sort", args.sortOrder);
   }
 
+  if (args.pageSize !== DEFAULT_PAGE_SIZE) {
+    params.set("pageSize", String(args.pageSize));
+  }
+
   if ((args.page ?? 1) > 1) {
     params.set("page", String(args.page));
   }
@@ -116,6 +128,7 @@ export default async function SetupHistoryPage(props: {
     actor?: string;
     time?: string;
     sort?: string;
+    pageSize?: string;
     page?: string;
   }>;
 }) {
@@ -130,6 +143,7 @@ export default async function SetupHistoryPage(props: {
   const actionFilter = normalizeActionFilter(searchParams.action);
   const timeFilter = normalizeTimeFilter(searchParams.time);
   const sortOrder = normalizeSortOrder(searchParams.sort);
+  const pageSize = normalizePageSize(searchParams.pageSize);
   const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getProviderVerificationHistory(user.organizationId);
   const actorOptions = Array.from(
@@ -218,16 +232,17 @@ export default async function SetupHistoryPage(props: {
     return providerMatches && actionMatches && actorMatches;
   });
   const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
-  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / SETUP_HISTORY_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / pageSize));
   const currentPage = Math.min(requestedPage, totalPages);
-  const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
-  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + pageSize);
   const exportHref = buildHistoryHref({
     providerFilter,
     actionFilter,
     actorFilter,
     timeFilter,
     sortOrder,
+    pageSize,
     page: currentPage,
     exportPath: true,
   });
@@ -237,6 +252,7 @@ export default async function SetupHistoryPage(props: {
     actorFilter,
     timeFilter,
     sortOrder,
+    pageSize,
     page: currentPage,
     exportPath: true,
     exportScope: "all",
@@ -247,6 +263,7 @@ export default async function SetupHistoryPage(props: {
     actorFilter,
     timeFilter,
     sortOrder,
+    pageSize,
     page: currentPage,
   });
   const clearFiltersHref = buildHistoryHref({
@@ -255,6 +272,7 @@ export default async function SetupHistoryPage(props: {
     actorFilter: "all",
     timeFilter: "all",
     sortOrder: "newest",
+    pageSize: DEFAULT_PAGE_SIZE,
     page: 1,
   });
 
@@ -333,6 +351,7 @@ export default async function SetupHistoryPage(props: {
                       actorFilter,
                       timeFilter,
                       sortOrder,
+                      pageSize,
                       page: 1,
                     })}
                     aria-current={isActive ? "page" : undefined}
@@ -360,6 +379,7 @@ export default async function SetupHistoryPage(props: {
                         actorFilter,
                         timeFilter,
                         sortOrder,
+                        pageSize,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -382,6 +402,7 @@ export default async function SetupHistoryPage(props: {
                     actorFilter,
                     timeFilter,
                     sortOrder,
+                    pageSize,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -400,6 +421,7 @@ export default async function SetupHistoryPage(props: {
                     actorFilter,
                     timeFilter,
                     sortOrder,
+                    pageSize,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -429,6 +451,7 @@ export default async function SetupHistoryPage(props: {
                         actorFilter: preset.actorFilter,
                         timeFilter: preset.timeFilter,
                         sortOrder,
+                        pageSize,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -451,6 +474,7 @@ export default async function SetupHistoryPage(props: {
                     actorFilter: "all",
                     timeFilter,
                     sortOrder,
+                    pageSize,
                     page: 1,
                   })}
                   aria-current={actorFilter === "all" ? "page" : undefined}
@@ -471,6 +495,7 @@ export default async function SetupHistoryPage(props: {
                       actorFilter: actor.value,
                       timeFilter,
                       sortOrder,
+                      pageSize,
                       page: 1,
                     })}
                     aria-current={actor.value === actorFilter ? "page" : undefined}
@@ -497,6 +522,7 @@ export default async function SetupHistoryPage(props: {
                         actorFilter,
                         timeFilter: filter.value,
                         sortOrder,
+                        pageSize,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -524,6 +550,7 @@ export default async function SetupHistoryPage(props: {
                         actorFilter,
                         timeFilter,
                         sortOrder: filter.value,
+                        pageSize,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -534,6 +561,34 @@ export default async function SetupHistoryPage(props: {
                       }`}
                     >
                       {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2" data-provider-history-page-size-filters>
+                {PAGE_SIZE_OPTIONS.map((size) => {
+                  const isActive = size === pageSize;
+
+                  return (
+                    <Link
+                      key={size}
+                      href={buildHistoryHref({
+                        providerFilter,
+                        actionFilter,
+                        actorFilter,
+                        timeFilter,
+                        sortOrder,
+                        pageSize: size,
+                        page: 1,
+                      })}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {size} per page
                     </Link>
                   );
                 })}
@@ -581,7 +636,7 @@ export default async function SetupHistoryPage(props: {
               </p>
               <p>
                 Showing {paginatedHistory.length} of {filteredHistory.length} matching event
-                {filteredHistory.length === 1 ? "" : "s"}.
+                {filteredHistory.length === 1 ? "" : "s"} ({pageSize} per page).
               </p>
             </div>
           ) : null}
@@ -630,6 +685,7 @@ export default async function SetupHistoryPage(props: {
                   actorFilter,
                   timeFilter,
                   sortOrder,
+                  pageSize,
                   page: Math.max(1, currentPage - 1),
                 })}
                 aria-disabled={currentPage === 1}
@@ -651,6 +707,7 @@ export default async function SetupHistoryPage(props: {
                       actorFilter,
                       timeFilter,
                       sortOrder,
+                      pageSize,
                       page: pageNumber,
                     })}
                     aria-current={pageNumber === currentPage ? "page" : undefined}
@@ -671,6 +728,7 @@ export default async function SetupHistoryPage(props: {
                   actorFilter,
                   timeFilter,
                   sortOrder,
+                  pageSize,
                   page: Math.min(totalPages, currentPage + 1),
                 })}
                 aria-disabled={currentPage === totalPages}

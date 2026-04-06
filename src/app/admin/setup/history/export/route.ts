@@ -17,7 +17,8 @@ const ALLOWED_PROVIDER_FILTERS = ["all", "auth_email", "outbound_email", "ai_gen
 const ALLOWED_ACTION_FILTERS = ["all", "verified", "reopened"] as const;
 const ALLOWED_TIME_FILTERS = ["all", "24h", "7d", "30d"] as const;
 const ALLOWED_SORT_FILTERS = ["newest", "oldest"] as const;
-const SETUP_HISTORY_PER_PAGE = 8;
+const PAGE_SIZE_OPTIONS = [8, 20, 50] as const;
+const DEFAULT_PAGE_SIZE = 8;
 
 function normalizeProviderFilter(value: string | null) {
   return ALLOWED_PROVIDER_FILTERS.includes((value ?? "all") as (typeof ALLOWED_PROVIDER_FILTERS)[number])
@@ -53,6 +54,12 @@ function normalizePageNumber(value: string | null) {
   return parsed;
 }
 
+function normalizePageSize(value: string | null) {
+  const parsed = Number.parseInt(value ?? String(DEFAULT_PAGE_SIZE), 10);
+
+  return PAGE_SIZE_OPTIONS.includes(parsed as (typeof PAGE_SIZE_OPTIONS)[number]) ? parsed : DEFAULT_PAGE_SIZE;
+}
+
 export async function GET(request: Request) {
   const session = await auth();
   const user = session?.user;
@@ -66,6 +73,7 @@ export async function GET(request: Request) {
   const actionFilter = normalizeActionFilter(searchParams.get("action"));
   const timeFilter = normalizeTimeFilter(searchParams.get("time"));
   const sortOrder = normalizeSortOrder(searchParams.get("sort"));
+  const pageSize = normalizePageSize(searchParams.get("pageSize"));
   const page = normalizePageNumber(searchParams.get("page"));
   const scope = searchParams.get("scope") === "all" ? "all" : "page";
   const actorFilter = searchParams.get("actor")?.trim() || "all";
@@ -87,10 +95,10 @@ export async function GET(request: Request) {
     return timeMatches && providerMatches && actionMatches && actorMatches;
   });
   const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
-  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / SETUP_HISTORY_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
-  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + pageSize);
   const historyToExport = scope === "all" ? sortedFilteredHistory : paginatedHistory;
 
   const header = [
@@ -123,6 +131,7 @@ export async function GET(request: Request) {
     actionFilter !== "all" ? actionFilter : null,
     timeFilter !== "all" ? timeFilter : null,
     sortOrder !== "newest" ? sortOrder : null,
+    pageSize !== DEFAULT_PAGE_SIZE ? `size-${pageSize}` : null,
     actorFilter !== "all" ? actorFilter.replaceAll(/[^a-z0-9@._-]+/gi, "-") : null,
     scope === "all" ? "all" : `page-${currentPage}`,
   ].filter(Boolean);

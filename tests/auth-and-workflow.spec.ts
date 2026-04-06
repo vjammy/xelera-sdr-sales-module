@@ -954,19 +954,25 @@ test("manager can see provider readiness from send operations", async ({ page })
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest/,
   );
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("oldest first");
+  const pageSizeFilters = page.locator("[data-provider-history-page-size-filters]");
+  await expect(pageSizeFilters).toBeVisible();
+  await pageSizeFilters.getByRole("link", { name: "20 per page" }).click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
+  );
   const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");
   expect(setupHistoryExportHref).toMatch(
-    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest/,
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
   );
   const setupHistoryFilteredExportHref = await page
     .locator("[data-export-setup-history-filtered]")
     .getAttribute("href");
   expect(setupHistoryFilteredExportHref).toMatch(
-    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&scope=all/,
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&scope=all/,
   );
   await expect(page.locator("[data-setup-history-share-view]")).toBeVisible();
   await expect(page.locator("[data-setup-history-share-url]")).toHaveValue(
-    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest/,
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
   );
   await page.getByRole("link", { name: "Clear filters" }).click();
   await expect(page).toHaveURL("/admin/setup/history");
