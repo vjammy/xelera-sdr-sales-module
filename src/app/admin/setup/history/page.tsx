@@ -30,6 +30,16 @@ const SORT_FILTERS = [
 ] as const;
 const PAGE_SIZE_OPTIONS = [8, 20, 50] as const;
 const DEFAULT_PAGE_SIZE = 8;
+type SetupHistoryPreset = {
+  label: string;
+  providerFilter: string;
+  actionFilter: string;
+  actorFilter: string;
+  timeFilter: string;
+  sortOrder: string;
+  pageSize: number;
+  searchQuery: string;
+};
 
 function getStatusBadgeClasses(action: string) {
   if (action === "verified") {
@@ -175,7 +185,8 @@ export default async function SetupHistoryPage(props: {
     searchParams.actor && actorOptions.some((option) => option.value === searchParams.actor)
       ? searchParams.actor
       : "all";
-  const presets = [
+  const currentTimestamp = new Date().getTime();
+  const presets: SetupHistoryPreset[] = [
     {
       label: "All events",
       providerFilter: "all",
@@ -227,7 +238,29 @@ export default async function SetupHistoryPage(props: {
       searchQuery: "",
     },
   ];
-  const currentTimestamp = new Date().getTime();
+  const resolveCutoffTimestamp = (value: string) =>
+    value === "24h"
+      ? new Date(currentTimestamp - 24 * 60 * 60 * 1000)
+      : value === "7d"
+        ? new Date(currentTimestamp - 7 * 24 * 60 * 60 * 1000)
+        : value === "30d"
+          ? new Date(currentTimestamp - 30 * 24 * 60 * 60 * 1000)
+          : null;
+  const presetCounts = new Map(
+    presets.map((preset) => {
+      const presetCutoff = resolveCutoffTimestamp(preset.timeFilter);
+      const count = history.filter((event) => {
+        const timeMatches = presetCutoff === null || event.createdAt >= presetCutoff;
+        const providerMatches = preset.providerFilter === "all" || event.providerKey === preset.providerFilter;
+        const actionMatches = preset.actionFilter === "all" || event.action === preset.actionFilter;
+        const actorMatches = preset.actorFilter === "all" || event.actorEmail === preset.actorFilter;
+
+        return timeMatches && providerMatches && actionMatches && actorMatches;
+      }).length;
+
+      return [preset.label, count] as const;
+    }),
+  );
   const cutoffTimestamp =
     timeFilter === "24h"
       ? new Date(currentTimestamp - 24 * 60 * 60 * 1000)
@@ -698,13 +731,16 @@ export default async function SetupHistoryPage(props: {
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                         isActive
                           ? "bg-slate-950 text-white"
                           : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
                       }`}
                     >
                       {preset.label}
+                      <span className="ml-1 text-xs font-semibold opacity-80" data-setup-history-preset-count>
+                        ({presetCounts.get(preset.label) ?? 0})
+                      </span>
                     </Link>
                   );
                 })}

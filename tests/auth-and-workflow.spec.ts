@@ -914,6 +914,7 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(verificationHistory).toContainText("Ava Manager");
   const setupHistoryPresets = page.locator("[data-setup-history-presets]");
   await expect(setupHistoryPresets).toBeVisible();
+  await expect(setupHistoryPresets.locator("[data-setup-history-preset-count]").first()).toBeVisible();
   await setupHistoryPresets.getByRole("link", { name: "Reopened this week" }).click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
