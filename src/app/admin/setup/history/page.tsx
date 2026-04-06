@@ -71,6 +71,10 @@ function normalizePageSize(value: string | undefined) {
   return PAGE_SIZE_OPTIONS.includes(parsed as (typeof PAGE_SIZE_OPTIONS)[number]) ? parsed : DEFAULT_PAGE_SIZE;
 }
 
+function normalizeSearchQuery(value: string | undefined) {
+  return (value ?? "").trim().slice(0, 80);
+}
+
 function buildHistoryHref(args: {
   providerFilter: string;
   actionFilter: string;
@@ -78,6 +82,7 @@ function buildHistoryHref(args: {
   timeFilter: string;
   sortOrder: string;
   pageSize: number;
+  searchQuery?: string;
   page?: number;
   exportPath?: boolean;
   exportScope?: "page" | "all";
@@ -108,6 +113,11 @@ function buildHistoryHref(args: {
     params.set("pageSize", String(args.pageSize));
   }
 
+  const normalizedSearchQuery = (args.searchQuery ?? "").trim();
+  if (normalizedSearchQuery) {
+    params.set("q", normalizedSearchQuery);
+  }
+
   if ((args.page ?? 1) > 1) {
     params.set("page", String(args.page));
   }
@@ -129,6 +139,7 @@ export default async function SetupHistoryPage(props: {
     time?: string;
     sort?: string;
     pageSize?: string;
+    q?: string;
     page?: string;
   }>;
 }) {
@@ -144,6 +155,7 @@ export default async function SetupHistoryPage(props: {
   const timeFilter = normalizeTimeFilter(searchParams.time);
   const sortOrder = normalizeSortOrder(searchParams.sort);
   const pageSize = normalizePageSize(searchParams.pageSize);
+  const searchQuery = normalizeSearchQuery(searchParams.q);
   const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getProviderVerificationHistory(user.organizationId);
   const actorOptions = Array.from(
@@ -228,8 +240,15 @@ export default async function SetupHistoryPage(props: {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
+    const queryMatches =
+      searchQuery.length === 0 ||
+      event.providerLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.providerKey.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.actorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (event.actorEmail ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.action.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return providerMatches && actionMatches && actorMatches;
+    return providerMatches && actionMatches && actorMatches && queryMatches;
   });
   const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
   const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / pageSize));
@@ -243,6 +262,7 @@ export default async function SetupHistoryPage(props: {
     timeFilter,
     sortOrder,
     pageSize,
+    searchQuery,
     page: currentPage,
     exportPath: true,
   });
@@ -253,6 +273,7 @@ export default async function SetupHistoryPage(props: {
     timeFilter,
     sortOrder,
     pageSize,
+    searchQuery,
     page: currentPage,
     exportPath: true,
     exportScope: "all",
@@ -264,6 +285,7 @@ export default async function SetupHistoryPage(props: {
     timeFilter,
     sortOrder,
     pageSize,
+    searchQuery,
     page: currentPage,
   });
   const clearFiltersHref = buildHistoryHref({
@@ -273,6 +295,7 @@ export default async function SetupHistoryPage(props: {
     timeFilter: "all",
     sortOrder: "newest",
     pageSize: DEFAULT_PAGE_SIZE,
+    searchQuery: "",
     page: 1,
   });
 
@@ -309,7 +332,12 @@ export default async function SetupHistoryPage(props: {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" || sortOrder !== "newest" ? (
+              {providerFilter !== "all" ||
+              actionFilter !== "all" ||
+              actorFilter !== "all" ||
+              timeFilter !== "all" ||
+              sortOrder !== "newest" ||
+              searchQuery.length > 0 ? (
                 <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
                   Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
                   {providerFilter !== "all"
@@ -333,11 +361,52 @@ export default async function SetupHistoryPage(props: {
                         SORT_FILTERS.find((option) => option.value === sortOrder)?.label.toLowerCase() ?? "oldest first"
                       }`
                     : ""}
+                  {searchQuery.length > 0
+                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" || sortOrder !== "newest" ? ", " : " matching "}“${searchQuery}”`
+                    : ""}
                   .
                 </p>
               ) : null}
             </div>
             <div className="space-y-3">
+              <form method="GET" className="flex flex-wrap items-center gap-2" data-provider-history-search>
+                {providerFilter !== "all" ? <input type="hidden" name="provider" value={providerFilter} /> : null}
+                {actionFilter !== "all" ? <input type="hidden" name="action" value={actionFilter} /> : null}
+                {actorFilter !== "all" ? <input type="hidden" name="actor" value={actorFilter} /> : null}
+                {timeFilter !== "all" ? <input type="hidden" name="time" value={timeFilter} /> : null}
+                {sortOrder !== "newest" ? <input type="hidden" name="sort" value={sortOrder} /> : null}
+                {pageSize !== DEFAULT_PAGE_SIZE ? <input type="hidden" name="pageSize" value={String(pageSize)} /> : null}
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={searchQuery}
+                  placeholder="Search actor, provider, or action"
+                  className="min-w-[240px] flex-1 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400"
+                />
+                <button
+                  type="submit"
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  Apply search
+                </button>
+                {searchQuery.length > 0 ? (
+                  <Link
+                    href={buildHistoryHref({
+                      providerFilter,
+                      actionFilter,
+                      actorFilter,
+                      timeFilter,
+                      sortOrder,
+                      pageSize,
+                      searchQuery: "",
+                      page: 1,
+                    })}
+                    className="text-xs font-semibold text-teal-700 transition hover:text-teal-900"
+                  >
+                    Clear search
+                  </Link>
+                ) : null}
+              </form>
               <div className="flex flex-wrap gap-2" data-provider-history-filters>
               {PROVIDER_FILTERS.map((filter) => {
                 const isActive = filter.value === providerFilter;
@@ -352,6 +421,7 @@ export default async function SetupHistoryPage(props: {
                       timeFilter,
                       sortOrder,
                       pageSize,
+                      searchQuery,
                       page: 1,
                     })}
                     aria-current={isActive ? "page" : undefined}
@@ -380,6 +450,7 @@ export default async function SetupHistoryPage(props: {
                         timeFilter,
                         sortOrder,
                         pageSize,
+                        searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -403,6 +474,7 @@ export default async function SetupHistoryPage(props: {
                     timeFilter,
                     sortOrder,
                     pageSize,
+                    searchQuery,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -422,6 +494,7 @@ export default async function SetupHistoryPage(props: {
                     timeFilter,
                     sortOrder,
                     pageSize,
+                    searchQuery,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -452,6 +525,7 @@ export default async function SetupHistoryPage(props: {
                         timeFilter: preset.timeFilter,
                         sortOrder,
                         pageSize,
+                        searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -475,6 +549,7 @@ export default async function SetupHistoryPage(props: {
                     timeFilter,
                     sortOrder,
                     pageSize,
+                    searchQuery,
                     page: 1,
                   })}
                   aria-current={actorFilter === "all" ? "page" : undefined}
@@ -496,6 +571,7 @@ export default async function SetupHistoryPage(props: {
                       timeFilter,
                       sortOrder,
                       pageSize,
+                      searchQuery,
                       page: 1,
                     })}
                     aria-current={actor.value === actorFilter ? "page" : undefined}
@@ -523,6 +599,7 @@ export default async function SetupHistoryPage(props: {
                         timeFilter: filter.value,
                         sortOrder,
                         pageSize,
+                        searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -551,6 +628,7 @@ export default async function SetupHistoryPage(props: {
                         timeFilter,
                         sortOrder: filter.value,
                         pageSize,
+                        searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -579,6 +657,7 @@ export default async function SetupHistoryPage(props: {
                         timeFilter,
                         sortOrder,
                         pageSize: size,
+                        searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -623,7 +702,8 @@ export default async function SetupHistoryPage(props: {
                 actionFilter === "all" &&
                 actorFilter === "all" &&
                 timeFilter === "all" &&
-                sortOrder === "newest"
+                sortOrder === "newest" &&
+                searchQuery.length === 0
                   ? "No provider verification history has been recorded yet."
                   : "No provider verification events match the current filters."}
               </p>
@@ -686,6 +766,7 @@ export default async function SetupHistoryPage(props: {
                   timeFilter,
                   sortOrder,
                   pageSize,
+                  searchQuery,
                   page: Math.max(1, currentPage - 1),
                 })}
                 aria-disabled={currentPage === 1}
@@ -708,6 +789,7 @@ export default async function SetupHistoryPage(props: {
                       timeFilter,
                       sortOrder,
                       pageSize,
+                      searchQuery,
                       page: pageNumber,
                     })}
                     aria-current={pageNumber === currentPage ? "page" : undefined}
@@ -729,6 +811,7 @@ export default async function SetupHistoryPage(props: {
                   timeFilter,
                   sortOrder,
                   pageSize,
+                  searchQuery,
                   page: Math.min(totalPages, currentPage + 1),
                 })}
                 aria-disabled={currentPage === totalPages}

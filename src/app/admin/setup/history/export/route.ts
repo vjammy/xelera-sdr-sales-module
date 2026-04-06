@@ -60,6 +60,10 @@ function normalizePageSize(value: string | null) {
   return PAGE_SIZE_OPTIONS.includes(parsed as (typeof PAGE_SIZE_OPTIONS)[number]) ? parsed : DEFAULT_PAGE_SIZE;
 }
 
+function normalizeSearchQuery(value: string | null) {
+  return (value ?? "").trim().slice(0, 80);
+}
+
 export async function GET(request: Request) {
   const session = await auth();
   const user = session?.user;
@@ -74,6 +78,7 @@ export async function GET(request: Request) {
   const timeFilter = normalizeTimeFilter(searchParams.get("time"));
   const sortOrder = normalizeSortOrder(searchParams.get("sort"));
   const pageSize = normalizePageSize(searchParams.get("pageSize"));
+  const searchQuery = normalizeSearchQuery(searchParams.get("q"));
   const page = normalizePageNumber(searchParams.get("page"));
   const scope = searchParams.get("scope") === "all" ? "all" : "page";
   const actorFilter = searchParams.get("actor")?.trim() || "all";
@@ -91,8 +96,15 @@ export async function GET(request: Request) {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
+    const queryMatches =
+      searchQuery.length === 0 ||
+      event.providerLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.providerKey.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.actorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (event.actorEmail ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.action.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return timeMatches && providerMatches && actionMatches && actorMatches;
+    return timeMatches && providerMatches && actionMatches && actorMatches && queryMatches;
   });
   const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
   const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / pageSize));
@@ -132,6 +144,7 @@ export async function GET(request: Request) {
     timeFilter !== "all" ? timeFilter : null,
     sortOrder !== "newest" ? sortOrder : null,
     pageSize !== DEFAULT_PAGE_SIZE ? `size-${pageSize}` : null,
+    searchQuery.length > 0 ? `q-${searchQuery.replaceAll(/[^a-z0-9._-]+/gi, "-")}` : null,
     actorFilter !== "all" ? actorFilter.replaceAll(/[^a-z0-9@._-]+/gi, "-") : null,
     scope === "all" ? "all" : `page-${currentPage}`,
   ].filter(Boolean);

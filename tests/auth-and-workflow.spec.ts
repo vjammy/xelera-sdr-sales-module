@@ -960,19 +960,27 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(page).toHaveURL(
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
   );
+  const searchForm = page.locator("[data-provider-history-search]");
+  await expect(searchForm).toBeVisible();
+  await page.getByPlaceholder("Search actor, provider, or action").fill("Ava");
+  await searchForm.getByRole("button", { name: "Apply search" }).click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
+  );
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava");
   const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");
   expect(setupHistoryExportHref).toMatch(
-    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
   );
   const setupHistoryFilteredExportHref = await page
     .locator("[data-export-setup-history-filtered]")
     .getAttribute("href");
   expect(setupHistoryFilteredExportHref).toMatch(
-    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&scope=all/,
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava&scope=all/,
   );
   await expect(page.locator("[data-setup-history-share-view]")).toBeVisible();
   await expect(page.locator("[data-setup-history-share-url]")).toHaveValue(
-    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20/,
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
   );
   await page.getByRole("link", { name: "Clear filters" }).click();
   await expect(page).toHaveURL("/admin/setup/history");
