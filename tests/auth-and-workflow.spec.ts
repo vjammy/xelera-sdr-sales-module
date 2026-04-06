@@ -951,6 +951,12 @@ test("manager can see provider readiness from send operations", async ({ page })
   expect(setupHistoryExportHref).toMatch(
     /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
   );
+  await expect(page.locator("[data-setup-history-share-view]")).toBeVisible();
+  await expect(page.locator("[data-setup-history-share-url]")).toHaveValue(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
+  );
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL("/admin/setup/history");
   const setupHistoryExportResponse = await page.request.get(setupHistoryExportHref ?? "");
   expect(setupHistoryExportResponse.ok()).toBeTruthy();
   expect(setupHistoryExportResponse.headers()["content-type"]).toContain("text/csv");

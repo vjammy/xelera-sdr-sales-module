@@ -203,6 +203,20 @@ export default async function SetupHistoryPage(props: {
     page: currentPage,
     exportPath: true,
   });
+  const currentViewHref = buildHistoryHref({
+    providerFilter,
+    actionFilter,
+    actorFilter,
+    timeFilter,
+    page: currentPage,
+  });
+  const clearFiltersHref = buildHistoryHref({
+    providerFilter: "all",
+    actionFilter: "all",
+    actorFilter: "all",
+    timeFilter: "all",
+    page: 1,
+  });
 
   return (
     <WorkspaceShell user={user}>
@@ -487,6 +501,26 @@ export default async function SetupHistoryPage(props: {
               </p>
             </div>
           ) : null}
+          <div
+            data-setup-history-share-view
+            className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Share Current View</p>
+              <Link
+                href={clearFiltersHref}
+                className="text-xs font-semibold text-teal-700 transition hover:text-teal-900"
+              >
+                Clear filters
+              </Link>
+            </div>
+            <input
+              readOnly
+              value={currentViewHref}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700"
+              data-setup-history-share-url
+            />
+          </div>
           <div className="mt-4 flex justify-end">
             <Link
               href={exportHref}
