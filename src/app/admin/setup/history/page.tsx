@@ -88,6 +88,26 @@ export default async function SetupHistoryPage(props: {
     searchParams.actor && actorOptions.some((option) => option.value === searchParams.actor)
       ? searchParams.actor
       : "all";
+  const providerActorScopedHistory = history.filter((event) => {
+    const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
+    const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
+
+    return providerMatches && actorMatches;
+  });
+  const actionSummary = providerActorScopedHistory.reduce(
+    (summary, event) => {
+      if (event.action === "verified") {
+        summary.verified += 1;
+      }
+
+      if (event.action === "reopened") {
+        summary.reopened += 1;
+      }
+
+      return summary;
+    },
+    { verified: 0, reopened: 0 },
+  );
   const filteredHistory = history.filter((event) => {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
@@ -195,6 +215,38 @@ export default async function SetupHistoryPage(props: {
                     </Link>
                   );
                 })}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2" data-provider-history-action-summary>
+                <Link
+                  href={buildHistoryHref({
+                    providerFilter,
+                    actionFilter: "verified",
+                    actorFilter,
+                  })}
+                  className={`rounded-2xl border px-3 py-2 text-sm transition ${
+                    actionFilter === "verified"
+                      ? "border-emerald-300 bg-emerald-50"
+                      : "border-slate-300 bg-white hover:border-emerald-200 hover:bg-emerald-50/60"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-900">Verified</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950">{actionSummary.verified}</p>
+                </Link>
+                <Link
+                  href={buildHistoryHref({
+                    providerFilter,
+                    actionFilter: "reopened",
+                    actorFilter,
+                  })}
+                  className={`rounded-2xl border px-3 py-2 text-sm transition ${
+                    actionFilter === "reopened"
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-slate-300 bg-white hover:border-amber-200 hover:bg-amber-50/60"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-900">Reopened</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950">{actionSummary.reopened}</p>
+                </Link>
               </div>
               <div className="flex flex-wrap gap-2" data-provider-history-actor-filters>
                 <Link

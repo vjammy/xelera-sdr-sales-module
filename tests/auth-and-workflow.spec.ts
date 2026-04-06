@@ -913,8 +913,14 @@ test("manager can see provider readiness from send operations", async ({ page })
   const verificationEvents = page.locator("[data-provider-verification-events]");
   await expect(verificationEvents).toContainText("Cron protection");
   await expect(verificationEvents).not.toContainText("Auth sign-in email");
+  const actionSummary = page.locator("[data-provider-history-action-summary]");
+  await expect(actionSummary).toBeVisible();
+  await expect(actionSummary).toContainText("Verified");
+  await expect(actionSummary).toContainText("Reopened");
   const actionFilters = page.locator("[data-provider-history-action-filters]");
   await expect(actionFilters).toBeVisible();
+  await actionSummary.getByRole("link", { name: /Reopened/i }).click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection&action=reopened/);
   await actionFilters.getByRole("link", { name: "Reopened" }).click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection&action=reopened/);
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
