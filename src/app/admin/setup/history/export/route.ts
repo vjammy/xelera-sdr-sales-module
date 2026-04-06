@@ -16,6 +16,7 @@ function csvEscape(value: string | number | boolean) {
 const ALLOWED_PROVIDER_FILTERS = ["all", "auth_email", "outbound_email", "ai_generation", "cron_protection"] as const;
 const ALLOWED_ACTION_FILTERS = ["all", "verified", "reopened"] as const;
 const ALLOWED_TIME_FILTERS = ["all", "24h", "7d", "30d"] as const;
+const ALLOWED_SORT_FILTERS = ["newest", "oldest"] as const;
 const SETUP_HISTORY_PER_PAGE = 8;
 
 function normalizeProviderFilter(value: string | null) {
@@ -34,6 +35,12 @@ function normalizeTimeFilter(value: string | null) {
   return ALLOWED_TIME_FILTERS.includes((value ?? "all") as (typeof ALLOWED_TIME_FILTERS)[number])
     ? (value ?? "all")
     : "all";
+}
+
+function normalizeSortOrder(value: string | null) {
+  return ALLOWED_SORT_FILTERS.includes((value ?? "newest") as (typeof ALLOWED_SORT_FILTERS)[number])
+    ? (value ?? "newest")
+    : "newest";
 }
 
 function normalizePageNumber(value: string | null) {
@@ -58,6 +65,7 @@ export async function GET(request: Request) {
   const providerFilter = normalizeProviderFilter(searchParams.get("provider"));
   const actionFilter = normalizeActionFilter(searchParams.get("action"));
   const timeFilter = normalizeTimeFilter(searchParams.get("time"));
+  const sortOrder = normalizeSortOrder(searchParams.get("sort"));
   const page = normalizePageNumber(searchParams.get("page"));
   const scope = searchParams.get("scope") === "all" ? "all" : "page";
   const actorFilter = searchParams.get("actor")?.trim() || "all";
@@ -78,11 +86,12 @@ export async function GET(request: Request) {
 
     return timeMatches && providerMatches && actionMatches && actorMatches;
   });
-  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / SETUP_HISTORY_PER_PAGE));
+  const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / SETUP_HISTORY_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
-  const paginatedHistory = filteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
-  const historyToExport = scope === "all" ? filteredHistory : paginatedHistory;
+  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
+  const historyToExport = scope === "all" ? sortedFilteredHistory : paginatedHistory;
 
   const header = [
     "event_id",
@@ -113,6 +122,7 @@ export async function GET(request: Request) {
     providerFilter !== "all" ? providerFilter : null,
     actionFilter !== "all" ? actionFilter : null,
     timeFilter !== "all" ? timeFilter : null,
+    sortOrder !== "newest" ? sortOrder : null,
     actorFilter !== "all" ? actorFilter.replaceAll(/[^a-z0-9@._-]+/gi, "-") : null,
     scope === "all" ? "all" : `page-${currentPage}`,
   ].filter(Boolean);

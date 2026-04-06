@@ -24,6 +24,10 @@ const TIME_FILTERS = [
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
 ] as const;
+const SORT_FILTERS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+] as const;
 const SETUP_HISTORY_PER_PAGE = 8;
 
 function getStatusBadgeClasses(action: string) {
@@ -46,6 +50,10 @@ function normalizeTimeFilter(value: string | undefined) {
   return TIME_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
 }
 
+function normalizeSortOrder(value: string | undefined) {
+  return SORT_FILTERS.some((option) => option.value === value) ? value ?? "newest" : "newest";
+}
+
 function normalizePageNumber(value: string | undefined) {
   const parsed = Number.parseInt(value ?? "1", 10);
 
@@ -61,6 +69,7 @@ function buildHistoryHref(args: {
   actionFilter: string;
   actorFilter: string;
   timeFilter: string;
+  sortOrder: string;
   page?: number;
   exportPath?: boolean;
   exportScope?: "page" | "all";
@@ -83,6 +92,10 @@ function buildHistoryHref(args: {
     params.set("time", args.timeFilter);
   }
 
+  if (args.sortOrder !== "newest") {
+    params.set("sort", args.sortOrder);
+  }
+
   if ((args.page ?? 1) > 1) {
     params.set("page", String(args.page));
   }
@@ -97,7 +110,14 @@ function buildHistoryHref(args: {
 }
 
 export default async function SetupHistoryPage(props: {
-  searchParams?: Promise<{ provider?: string; action?: string; actor?: string; time?: string; page?: string }>;
+  searchParams?: Promise<{
+    provider?: string;
+    action?: string;
+    actor?: string;
+    time?: string;
+    sort?: string;
+    page?: string;
+  }>;
 }) {
   const user = await requireUser();
 
@@ -109,6 +129,7 @@ export default async function SetupHistoryPage(props: {
   const providerFilter = normalizeProviderFilter(searchParams.provider);
   const actionFilter = normalizeActionFilter(searchParams.action);
   const timeFilter = normalizeTimeFilter(searchParams.time);
+  const sortOrder = normalizeSortOrder(searchParams.sort);
   const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getProviderVerificationHistory(user.organizationId);
   const actorOptions = Array.from(
@@ -196,15 +217,17 @@ export default async function SetupHistoryPage(props: {
 
     return providerMatches && actionMatches && actorMatches;
   });
-  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / SETUP_HISTORY_PER_PAGE));
+  const sortedFilteredHistory = sortOrder === "oldest" ? [...filteredHistory].reverse() : filteredHistory;
+  const totalPages = Math.max(1, Math.ceil(sortedFilteredHistory.length / SETUP_HISTORY_PER_PAGE));
   const currentPage = Math.min(requestedPage, totalPages);
   const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
-  const paginatedHistory = filteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
+  const paginatedHistory = sortedFilteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
   const exportHref = buildHistoryHref({
     providerFilter,
     actionFilter,
     actorFilter,
     timeFilter,
+    sortOrder,
     page: currentPage,
     exportPath: true,
   });
@@ -213,6 +236,7 @@ export default async function SetupHistoryPage(props: {
     actionFilter,
     actorFilter,
     timeFilter,
+    sortOrder,
     page: currentPage,
     exportPath: true,
     exportScope: "all",
@@ -222,6 +246,7 @@ export default async function SetupHistoryPage(props: {
     actionFilter,
     actorFilter,
     timeFilter,
+    sortOrder,
     page: currentPage,
   });
   const clearFiltersHref = buildHistoryHref({
@@ -229,6 +254,7 @@ export default async function SetupHistoryPage(props: {
     actionFilter: "all",
     actorFilter: "all",
     timeFilter: "all",
+    sortOrder: "newest",
     page: 1,
   });
 
@@ -265,7 +291,7 @@ export default async function SetupHistoryPage(props: {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" ? (
+              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" || sortOrder !== "newest" ? (
                 <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
                   Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
                   {providerFilter !== "all"
@@ -282,6 +308,11 @@ export default async function SetupHistoryPage(props: {
                   {timeFilter !== "all"
                     ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? " in " : " for "}${
                         TIME_FILTERS.find((option) => option.value === timeFilter)?.label?.toLowerCase() ?? "selected range"
+                      }`
+                    : ""}
+                  {sortOrder !== "newest"
+                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" ? ", " : " sorted "}${
+                        SORT_FILTERS.find((option) => option.value === sortOrder)?.label.toLowerCase() ?? "oldest first"
                       }`
                     : ""}
                   .
@@ -301,6 +332,7 @@ export default async function SetupHistoryPage(props: {
                       actionFilter,
                       actorFilter,
                       timeFilter,
+                      sortOrder,
                       page: 1,
                     })}
                     aria-current={isActive ? "page" : undefined}
@@ -327,6 +359,7 @@ export default async function SetupHistoryPage(props: {
                         actionFilter: filter.value,
                         actorFilter,
                         timeFilter,
+                        sortOrder,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -348,6 +381,7 @@ export default async function SetupHistoryPage(props: {
                     actionFilter: "verified",
                     actorFilter,
                     timeFilter,
+                    sortOrder,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -365,6 +399,7 @@ export default async function SetupHistoryPage(props: {
                     actionFilter: "reopened",
                     actorFilter,
                     timeFilter,
+                    sortOrder,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -393,6 +428,7 @@ export default async function SetupHistoryPage(props: {
                         actionFilter: preset.actionFilter,
                         actorFilter: preset.actorFilter,
                         timeFilter: preset.timeFilter,
+                        sortOrder,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -414,6 +450,7 @@ export default async function SetupHistoryPage(props: {
                     actionFilter,
                     actorFilter: "all",
                     timeFilter,
+                    sortOrder,
                     page: 1,
                   })}
                   aria-current={actorFilter === "all" ? "page" : undefined}
@@ -433,6 +470,7 @@ export default async function SetupHistoryPage(props: {
                       actionFilter,
                       actorFilter: actor.value,
                       timeFilter,
+                      sortOrder,
                       page: 1,
                     })}
                     aria-current={actor.value === actorFilter ? "page" : undefined}
@@ -458,17 +496,45 @@ export default async function SetupHistoryPage(props: {
                         actionFilter,
                         actorFilter,
                         timeFilter: filter.value,
-                      page: 1,
-                    })}
-                    aria-current={isActive ? "page" : undefined}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                      isActive
-                        ? "bg-slate-950 text-white"
-                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
-                    }`}
-                  >
-                    {filter.label}
-                  </Link>
+                        sortOrder,
+                        page: 1,
+                      })}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-2" data-provider-history-sort-filters>
+                {SORT_FILTERS.map((filter) => {
+                  const isActive = filter.value === sortOrder;
+
+                  return (
+                    <Link
+                      key={filter.value}
+                      href={buildHistoryHref({
+                        providerFilter,
+                        actionFilter,
+                        actorFilter,
+                        timeFilter,
+                        sortOrder: filter.value,
+                        page: 1,
+                      })}
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {filter.label}
+                    </Link>
                   );
                 })}
               </div>
@@ -498,7 +564,11 @@ export default async function SetupHistoryPage(props: {
               ))
             ) : (
               <p className="text-sm leading-7 text-slate-600">
-                {providerFilter === "all" && actionFilter === "all" && actorFilter === "all" && timeFilter === "all"
+                {providerFilter === "all" &&
+                actionFilter === "all" &&
+                actorFilter === "all" &&
+                timeFilter === "all" &&
+                sortOrder === "newest"
                   ? "No provider verification history has been recorded yet."
                   : "No provider verification events match the current filters."}
               </p>
@@ -559,6 +629,7 @@ export default async function SetupHistoryPage(props: {
                   actionFilter,
                   actorFilter,
                   timeFilter,
+                  sortOrder,
                   page: Math.max(1, currentPage - 1),
                 })}
                 aria-disabled={currentPage === 1}
@@ -579,6 +650,7 @@ export default async function SetupHistoryPage(props: {
                       actionFilter,
                       actorFilter,
                       timeFilter,
+                      sortOrder,
                       page: pageNumber,
                     })}
                     aria-current={pageNumber === currentPage ? "page" : undefined}
@@ -598,6 +670,7 @@ export default async function SetupHistoryPage(props: {
                   actionFilter,
                   actorFilter,
                   timeFilter,
+                  sortOrder,
                   page: Math.min(totalPages, currentPage + 1),
                 })}
                 aria-disabled={currentPage === totalPages}
