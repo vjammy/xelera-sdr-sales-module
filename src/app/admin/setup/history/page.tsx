@@ -39,6 +39,7 @@ function buildHistoryHref(args: {
   providerFilter: string;
   actionFilter: string;
   actorFilter: string;
+  exportPath?: boolean;
 }) {
   const params = new URLSearchParams();
 
@@ -55,7 +56,8 @@ function buildHistoryHref(args: {
   }
 
   const query = params.toString();
-  return query ? `/admin/setup/history?${query}` : "/admin/setup/history";
+  const basePath = args.exportPath ? "/admin/setup/history/export" : "/admin/setup/history";
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 export default async function SetupHistoryPage(props: {
@@ -114,6 +116,12 @@ export default async function SetupHistoryPage(props: {
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
 
     return providerMatches && actionMatches && actorMatches;
+  });
+  const exportHref = buildHistoryHref({
+    providerFilter,
+    actionFilter,
+    actorFilter,
+    exportPath: true,
   });
 
   return (
@@ -314,6 +322,15 @@ export default async function SetupHistoryPage(props: {
                   : "No provider verification events match the current filters."}
               </p>
             )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Link
+              href={exportHref}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+              data-export-setup-history
+            >
+              Export current view CSV
+            </Link>
           </div>
         </article>
       </section>

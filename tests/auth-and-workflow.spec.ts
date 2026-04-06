@@ -934,6 +934,18 @@ test("manager can see provider readiness from send operations", async ({ page })
   );
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava Manager");
   await expect(verificationEvents).toContainText("Ava Manager");
+  const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");
+  expect(setupHistoryExportHref).toMatch(
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai/,
+  );
+  const setupHistoryExportResponse = await page.request.get(setupHistoryExportHref ?? "");
+  expect(setupHistoryExportResponse.ok()).toBeTruthy();
+  expect(setupHistoryExportResponse.headers()["content-type"]).toContain("text/csv");
+  const setupHistoryExportBody = await setupHistoryExportResponse.text();
+  expect(setupHistoryExportBody).toContain("event_id,provider_key,provider_label,action,actor_name,actor_email,created_at");
+  expect(setupHistoryExportBody).toContain("cron_protection");
+  expect(setupHistoryExportBody).toContain("reopened");
+  expect(setupHistoryExportBody).toContain("ava.manager@xelera.ai");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {
