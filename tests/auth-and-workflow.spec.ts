@@ -951,6 +951,12 @@ test("manager can see provider readiness from send operations", async ({ page })
   expect(setupHistoryExportHref).toMatch(
     /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
   );
+  const setupHistoryFilteredExportHref = await page
+    .locator("[data-export-setup-history-filtered]")
+    .getAttribute("href");
+  expect(setupHistoryFilteredExportHref).toMatch(
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&scope=all/,
+  );
   await expect(page.locator("[data-setup-history-share-view]")).toBeVisible();
   await expect(page.locator("[data-setup-history-share-url]")).toHaveValue(
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
@@ -965,6 +971,9 @@ test("manager can see provider readiness from send operations", async ({ page })
   expect(setupHistoryExportBody).toContain("cron_protection");
   expect(setupHistoryExportBody).toContain("reopened");
   expect(setupHistoryExportBody).toContain("ava.manager@xelera.ai");
+  const setupHistoryFilteredExportResponse = await page.request.get(setupHistoryFilteredExportHref ?? "");
+  expect(setupHistoryFilteredExportResponse.ok()).toBeTruthy();
+  expect(setupHistoryFilteredExportResponse.headers()["content-type"]).toContain("text/csv");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

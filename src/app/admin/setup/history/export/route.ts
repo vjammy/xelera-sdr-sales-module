@@ -59,6 +59,7 @@ export async function GET(request: Request) {
   const actionFilter = normalizeActionFilter(searchParams.get("action"));
   const timeFilter = normalizeTimeFilter(searchParams.get("time"));
   const page = normalizePageNumber(searchParams.get("page"));
+  const scope = searchParams.get("scope") === "all" ? "all" : "page";
   const actorFilter = searchParams.get("actor")?.trim() || "all";
   const history = await getProviderVerificationHistory(user.organizationId);
   const cutoffTimestamp =
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
   const paginatedHistory = filteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
+  const historyToExport = scope === "all" ? filteredHistory : paginatedHistory;
 
   const header = [
     "event_id",
@@ -92,7 +94,7 @@ export async function GET(request: Request) {
     "created_at",
   ];
 
-  const rows = paginatedHistory.map((event) =>
+  const rows = historyToExport.map((event) =>
     [
       event.id,
       event.providerKey,
@@ -112,7 +114,7 @@ export async function GET(request: Request) {
     actionFilter !== "all" ? actionFilter : null,
     timeFilter !== "all" ? timeFilter : null,
     actorFilter !== "all" ? actorFilter.replaceAll(/[^a-z0-9@._-]+/gi, "-") : null,
-    `page-${currentPage}`,
+    scope === "all" ? "all" : `page-${currentPage}`,
   ].filter(Boolean);
 
   return new NextResponse([header.join(","), ...rows].join("\n"), {

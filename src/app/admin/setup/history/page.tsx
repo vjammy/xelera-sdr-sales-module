@@ -63,6 +63,7 @@ function buildHistoryHref(args: {
   timeFilter: string;
   page?: number;
   exportPath?: boolean;
+  exportScope?: "page" | "all";
 }) {
   const params = new URLSearchParams();
 
@@ -84,6 +85,10 @@ function buildHistoryHref(args: {
 
   if ((args.page ?? 1) > 1) {
     params.set("page", String(args.page));
+  }
+
+  if (args.exportPath && args.exportScope === "all") {
+    params.set("scope", "all");
   }
 
   const query = params.toString();
@@ -202,6 +207,15 @@ export default async function SetupHistoryPage(props: {
     timeFilter,
     page: currentPage,
     exportPath: true,
+  });
+  const exportFilteredHref = buildHistoryHref({
+    providerFilter,
+    actionFilter,
+    actorFilter,
+    timeFilter,
+    page: currentPage,
+    exportPath: true,
+    exportScope: "all",
   });
   const currentViewHref = buildHistoryHref({
     providerFilter,
@@ -521,13 +535,20 @@ export default async function SetupHistoryPage(props: {
               data-setup-history-share-url
             />
           </div>
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Link
+              href={exportFilteredHref}
+              className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
+              data-export-setup-history-filtered
+            >
+              Export filtered CSV
+            </Link>
             <Link
               href={exportHref}
               className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 hover:bg-slate-50"
               data-export-setup-history
             >
-              Export current view CSV
+              Export current page CSV
             </Link>
           </div>
           {totalPages > 1 ? (
