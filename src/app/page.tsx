@@ -372,12 +372,20 @@ export default async function Home() {
                   Pilot infrastructure status without opening environment settings
                 </h2>
               </div>
-              <Link
-                href="/admin/sends"
-                className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
-              >
-                Open send operations
-              </Link>
+              <div className="flex flex-wrap items-center gap-4">
+                <Link
+                  href="/admin/setup/history?time=7d"
+                  className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+                >
+                  Review setup history (7d)
+                </Link>
+                <Link
+                  href="/admin/sends"
+                  className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+                >
+                  Open send operations
+                </Link>
+              </div>
             </div>
             <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {providerReadiness.map((item) => (

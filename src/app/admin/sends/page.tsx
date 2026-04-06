@@ -64,7 +64,15 @@ export default async function SendOpsPage() {
             data-send-ops-provider-readiness
             className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40"
           >
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Provider Readiness</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Provider Readiness</p>
+              <Link
+                href="/admin/setup/history?time=7d"
+                className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              >
+                Review setup history (7d)
+              </Link>
+            </div>
             <div className="mt-5 space-y-3">
               {outbound.providerReadiness.map((item) => (
                 <article key={item.key} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">

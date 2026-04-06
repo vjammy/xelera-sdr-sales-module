@@ -70,10 +70,10 @@ export default async function SetupPage() {
               Return to dashboard
             </Link>
             <Link
-              href="/admin/setup/history"
+              href="/admin/setup/history?time=7d"
               className="rounded-full border border-slate-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-slate-500"
             >
-              Open setup history
+              Open setup history (7d)
             </Link>
           </div>
         </article>
@@ -191,10 +191,10 @@ export default async function SetupPage() {
             </h2>
           </div>
           <Link
-            href="/admin/setup/history"
+            href="/admin/setup/history?time=7d"
             className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
           >
-            View full history
+            View recent history (7d)
           </Link>
         </div>
         <div className="mt-5 space-y-3" data-provider-verification-history-preview>
