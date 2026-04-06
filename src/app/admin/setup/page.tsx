@@ -31,6 +31,14 @@ export default async function SetupPage() {
     getProviderReadiness(user.organizationId),
     getProviderVerificationHistory(user.organizationId),
   ]);
+  const currentTimestamp = new Date().getTime();
+  const weekAgo = new Date(currentTimestamp - 7 * 24 * 60 * 60 * 1000);
+  const reopenedThisWeekCount = verificationHistory.filter(
+    (event) => event.action === "reopened" && event.createdAt >= weekAgo,
+  ).length;
+  const myReopenedThisWeekCount = verificationHistory.filter(
+    (event) => event.action === "reopened" && event.createdAt >= weekAgo && event.actorEmail === user.email,
+  ).length;
 
   return (
     <WorkspaceShell user={user}>
@@ -194,14 +202,16 @@ export default async function SetupPage() {
             <Link
               href="/admin/setup/history?action=reopened&time=7d"
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              data-setup-reopened-week-link
             >
-              Reopened this week
+              Reopened this week ({reopenedThisWeekCount})
             </Link>
             <Link
               href={`/admin/setup/history?action=reopened&actor=${encodeURIComponent(user.email)}&time=7d`}
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              data-setup-my-reopened-week-link
             >
-              My reopened this week
+              My reopened this week ({myReopenedThisWeekCount})
             </Link>
             <Link
               href="/admin/setup/history?time=7d"

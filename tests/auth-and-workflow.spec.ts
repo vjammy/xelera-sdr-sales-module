@@ -901,10 +901,12 @@ test("manager can see provider readiness from send operations", async ({ page })
   await verificationHistoryPreview.getByRole("link", { name: "Cron protection" }).first().click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection&time=7d/);
   await page.goto("/admin/setup#cron_protection");
-  await page.getByRole("link", { name: /^Reopened this week$/ }).click();
+  await expect(page.locator("[data-setup-reopened-week-link]")).toContainText(/Reopened this week \(\d+\)/);
+  await page.locator("[data-setup-reopened-week-link]").click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
   await page.goto("/admin/setup#cron_protection");
-  await page.getByRole("link", { name: /^My reopened this week$/ }).click();
+  await expect(page.locator("[data-setup-my-reopened-week-link]")).toContainText(/My reopened this week \(\d+\)/);
+  await page.locator("[data-setup-my-reopened-week-link]").click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&actor=ava\.manager%40xelera\.ai&time=7d/);
   await page.goto("/admin/setup#cron_protection");
   await page.getByRole("link", { name: "View recent history (7d)" }).click();
