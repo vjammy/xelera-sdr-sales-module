@@ -203,7 +203,7 @@ export default async function SetupPage() {
               <article key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <Link
-                    href={`/admin/setup/history?provider=${encodeURIComponent(event.providerKey)}`}
+                    href={`/admin/setup/history?provider=${encodeURIComponent(event.providerKey)}&time=7d`}
                     className="text-base font-semibold text-slate-950 transition hover:text-slate-700"
                   >
                     {event.providerLabel}
