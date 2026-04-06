@@ -974,7 +974,19 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(page).toHaveURL(
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
   );
-  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava");
+  const activeFilters = page.locator("[data-setup-history-active-filters]");
+  await expect(activeFilters).toBeVisible();
+  await expect(activeFilters).toContainText("Actor:");
+  await expect(activeFilters).toContainText("Search:");
+  await activeFilters.getByRole("link", { name: "Remove actor filter" }).click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&time=24h&sort=oldest&pageSize=20&q=Ava/,
+  );
+  await expect(actorFilters).toBeVisible();
+  await actorFilters.getByRole("link", { name: /Ava Manager/ }).first().click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
+  );
   await expect(actionSummary.getByRole("link", { name: /Verified/i })).toContainText("1");
   await expect(actionSummary.getByRole("link", { name: /Reopened/i })).toContainText("1");
   const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");

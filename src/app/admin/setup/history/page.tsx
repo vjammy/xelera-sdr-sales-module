@@ -327,6 +327,120 @@ export default async function SetupHistoryPage(props: {
     searchQuery: "",
     page: 1,
   });
+  const activeFilterChips = [
+    providerFilter !== "all"
+      ? {
+          key: "provider",
+          label: `Provider: ${PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label ?? providerFilter}`,
+          href: buildHistoryHref({
+            providerFilter: "all",
+            actionFilter,
+            actorFilter,
+            timeFilter,
+            sortOrder,
+            pageSize,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    actionFilter !== "all"
+      ? {
+          key: "action",
+          label: `Action: ${ACTION_FILTERS.find((option) => option.value === actionFilter)?.label ?? actionFilter}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter: "all",
+            actorFilter,
+            timeFilter,
+            sortOrder,
+            pageSize,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    actorFilter !== "all"
+      ? {
+          key: "actor",
+          label: `Actor: ${actorOptions.find((option) => option.value === actorFilter)?.label ?? actorFilter}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter,
+            actorFilter: "all",
+            timeFilter,
+            sortOrder,
+            pageSize,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    timeFilter !== "all"
+      ? {
+          key: "time",
+          label: `Time: ${TIME_FILTERS.find((option) => option.value === timeFilter)?.label ?? timeFilter}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter,
+            actorFilter,
+            timeFilter: "all",
+            sortOrder,
+            pageSize,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    sortOrder !== "newest"
+      ? {
+          key: "sort",
+          label: `Sort: ${SORT_FILTERS.find((option) => option.value === sortOrder)?.label ?? sortOrder}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter,
+            actorFilter,
+            timeFilter,
+            sortOrder: "newest",
+            pageSize,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    pageSize !== DEFAULT_PAGE_SIZE
+      ? {
+          key: "pageSize",
+          label: `Page size: ${pageSize}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter,
+            actorFilter,
+            timeFilter,
+            sortOrder,
+            pageSize: DEFAULT_PAGE_SIZE,
+            searchQuery,
+            page: 1,
+          }),
+        }
+      : null,
+    searchQuery.length > 0
+      ? {
+          key: "search",
+          label: `Search: ${searchQuery}`,
+          href: buildHistoryHref({
+            providerFilter,
+            actionFilter,
+            actorFilter,
+            timeFilter,
+            sortOrder,
+            pageSize,
+            searchQuery: "",
+            page: 1,
+          }),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; href: string }>;
 
   return (
     <WorkspaceShell user={user}>
@@ -367,34 +481,48 @@ export default async function SetupHistoryPage(props: {
               timeFilter !== "all" ||
               sortOrder !== "newest" ||
               searchQuery.length > 0 ? (
-                <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
-                  Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
-                  {providerFilter !== "all"
-                    ? ` for ${PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label}`
-                    : ""}
-                  {actionFilter !== "all"
-                    ? `${providerFilter !== "all" ? " with " : " for "}${ACTION_FILTERS.find((option) => option.value === actionFilter)?.label.toLowerCase()} actions`
-                    : ""}
-                  {actorFilter !== "all"
-                    ? `${providerFilter !== "all" || actionFilter !== "all" ? " by " : " for "} ${
-                        actorOptions.find((option) => option.value === actorFilter)?.label
-                      }`
-                    : ""}
-                  {timeFilter !== "all"
-                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? " in " : " for "}${
-                        TIME_FILTERS.find((option) => option.value === timeFilter)?.label?.toLowerCase() ?? "selected range"
-                      }`
-                    : ""}
-                  {sortOrder !== "newest"
-                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" ? ", " : " sorted "}${
-                        SORT_FILTERS.find((option) => option.value === sortOrder)?.label.toLowerCase() ?? "oldest first"
-                      }`
-                    : ""}
-                  {searchQuery.length > 0
-                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" || sortOrder !== "newest" ? ", " : " matching "}“${searchQuery}”`
-                    : ""}
-                  .
-                </p>
+                <>
+                  <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
+                    Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
+                    {providerFilter !== "all"
+                      ? ` for ${PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label}`
+                      : ""}
+                    {actionFilter !== "all"
+                      ? `${providerFilter !== "all" ? " with " : " for "}${ACTION_FILTERS.find((option) => option.value === actionFilter)?.label.toLowerCase()} actions`
+                      : ""}
+                    {actorFilter !== "all"
+                      ? `${providerFilter !== "all" || actionFilter !== "all" ? " by " : " for "} ${
+                          actorOptions.find((option) => option.value === actorFilter)?.label
+                        }`
+                      : ""}
+                    {timeFilter !== "all"
+                      ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? " in " : " for "}${
+                          TIME_FILTERS.find((option) => option.value === timeFilter)?.label?.toLowerCase() ?? "selected range"
+                        }`
+                      : ""}
+                    {sortOrder !== "newest"
+                      ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" ? ", " : " sorted "}${
+                          SORT_FILTERS.find((option) => option.value === sortOrder)?.label.toLowerCase() ?? "oldest first"
+                        }`
+                      : ""}
+                    {searchQuery.length > 0
+                      ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" || sortOrder !== "newest" ? ", " : " matching "}“${searchQuery}”`
+                      : ""}
+                    .
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2" data-setup-history-active-filters>
+                    {activeFilterChips.map((chip) => (
+                      <Link
+                        key={chip.key}
+                        href={chip.href}
+                        aria-label={`Remove ${chip.key} filter`}
+                        className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                      >
+                        {chip.label}
+                      </Link>
+                    ))}
+                  </div>
+                </>
               ) : null}
             </div>
             <div className="space-y-3">
