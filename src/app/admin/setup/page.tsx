@@ -198,6 +198,12 @@ export default async function SetupPage() {
               Reopened this week
             </Link>
             <Link
+              href={`/admin/setup/history?action=reopened&actor=${encodeURIComponent(user.email)}&time=7d`}
+              className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+            >
+              My reopened this week
+            </Link>
+            <Link
               href="/admin/setup/history?time=7d"
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
             >
