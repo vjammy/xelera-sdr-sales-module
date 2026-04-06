@@ -219,8 +219,15 @@ export default async function SetupHistoryPage(props: {
     const timeMatches = cutoffTimestamp === null || event.createdAt >= cutoffTimestamp;
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
+    const queryMatches =
+      searchQuery.length === 0 ||
+      event.providerLabel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.providerKey.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.actorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (event.actorEmail ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      event.action.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return timeMatches && providerMatches && actorMatches;
+    return timeMatches && providerMatches && actorMatches && queryMatches;
   });
   const actionSummary = providerActorScopedHistory.reduce(
     (summary, event) => {

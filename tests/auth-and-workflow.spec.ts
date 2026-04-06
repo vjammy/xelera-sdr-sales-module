@@ -968,6 +968,8 @@ test("manager can see provider readiness from send operations", async ({ page })
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
   );
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava");
+  await expect(actionSummary.getByRole("link", { name: /Verified/i })).toContainText("1");
+  await expect(actionSummary.getByRole("link", { name: /Reopened/i })).toContainText("1");
   const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");
   expect(setupHistoryExportHref).toMatch(
     /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
