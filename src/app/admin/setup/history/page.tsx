@@ -182,6 +182,9 @@ export default async function SetupHistoryPage(props: {
       actionFilter: "all",
       actorFilter: "all",
       timeFilter: "all",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
     },
     {
       label: "Reopened events",
@@ -189,6 +192,19 @@ export default async function SetupHistoryPage(props: {
       actionFilter: "reopened",
       actorFilter: "all",
       timeFilter: "all",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
+    },
+    {
+      label: "Reopened this week",
+      providerFilter: "all",
+      actionFilter: "reopened",
+      actorFilter: "all",
+      timeFilter: "7d",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
     },
     {
       label: "Verified events",
@@ -196,6 +212,9 @@ export default async function SetupHistoryPage(props: {
       actionFilter: "verified",
       actorFilter: "all",
       timeFilter: "all",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
     },
     {
       label: "My changes",
@@ -203,6 +222,9 @@ export default async function SetupHistoryPage(props: {
       actionFilter: "all",
       actorFilter: user.email,
       timeFilter: "all",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
     },
   ];
   const currentTimestamp = new Date().getTime();
@@ -520,7 +542,10 @@ export default async function SetupHistoryPage(props: {
                     preset.providerFilter === providerFilter &&
                     preset.actionFilter === actionFilter &&
                     preset.actorFilter === actorFilter &&
-                    preset.timeFilter === timeFilter;
+                    preset.timeFilter === timeFilter &&
+                    preset.sortOrder === sortOrder &&
+                    preset.pageSize === pageSize &&
+                    preset.searchQuery === searchQuery;
 
                   return (
                     <Link
@@ -530,9 +555,9 @@ export default async function SetupHistoryPage(props: {
                         actionFilter: preset.actionFilter,
                         actorFilter: preset.actorFilter,
                         timeFilter: preset.timeFilter,
-                        sortOrder,
-                        pageSize,
-                        searchQuery,
+                        sortOrder: preset.sortOrder,
+                        pageSize: preset.pageSize,
+                        searchQuery: preset.searchQuery,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
