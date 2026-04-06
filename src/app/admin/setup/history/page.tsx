@@ -521,6 +521,15 @@ export default async function SetupHistoryPage(props: {
                         {chip.label}
                       </Link>
                     ))}
+                    {activeFilterChips.length > 1 ? (
+                      <Link
+                        href={clearFiltersHref}
+                        className="rounded-full border border-slate-300 bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                        data-setup-history-clear-all
+                      >
+                        Clear all
+                      </Link>
+                    ) : null}
                   </div>
                 </>
               ) : null}

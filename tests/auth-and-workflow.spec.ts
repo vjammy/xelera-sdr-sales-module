@@ -978,6 +978,7 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(activeFilters).toBeVisible();
   await expect(activeFilters).toContainText("Actor:");
   await expect(activeFilters).toContainText("Search:");
+  await expect(page.locator("[data-setup-history-clear-all]")).toBeVisible();
   await activeFilters.getByRole("link", { name: "Remove actor filter" }).click();
   await expect(page).toHaveURL(
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&time=24h&sort=oldest&pageSize=20&q=Ava/,
