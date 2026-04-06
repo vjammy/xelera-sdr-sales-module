@@ -237,6 +237,16 @@ export default async function SetupHistoryPage(props: {
       pageSize: DEFAULT_PAGE_SIZE,
       searchQuery: "",
     },
+    {
+      label: "My reopened this week",
+      providerFilter: "all",
+      actionFilter: "reopened",
+      actorFilter: user.email,
+      timeFilter: "7d",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
+    },
   ];
   const resolveCutoffTimestamp = (value: string) =>
     value === "24h"

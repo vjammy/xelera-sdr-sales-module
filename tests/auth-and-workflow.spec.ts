@@ -915,10 +915,15 @@ test("manager can see provider readiness from send operations", async ({ page })
   const setupHistoryPresets = page.locator("[data-setup-history-presets]");
   await expect(setupHistoryPresets).toBeVisible();
   await expect(setupHistoryPresets.locator("[data-setup-history-preset-count]").first()).toBeVisible();
-  await setupHistoryPresets.getByRole("link", { name: "Reopened this week" }).click();
+  await setupHistoryPresets.getByRole("link", { name: /^Reopened this week/ }).click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("last 7 days");
+  await setupHistoryPresets.getByRole("link", { name: /^My reopened this week/ }).click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?action=reopened&actor=ava\.manager%40xelera\.ai&time=7d/,
+  );
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava Manager");
   await setupHistoryPresets.getByRole("link", { name: "Reopened events" }).click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened/);
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
