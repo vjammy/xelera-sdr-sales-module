@@ -991,6 +991,16 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(page.locator("[data-setup-history-share-url]")).toHaveValue(
     /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h&sort=oldest&pageSize=20&q=Ava/,
   );
+  const noMatchQuery = `no-match-${Date.now()}`;
+  await page.getByPlaceholder("Search actor, provider, or action").fill(noMatchQuery);
+  await searchForm.getByRole("button", { name: "Apply search" }).click();
+  await expect(page.locator("[data-provider-verification-events]")).toContainText(
+    "No provider verification events match the current filters.",
+  );
+  const emptyActions = page.locator("[data-setup-history-empty-actions]");
+  await expect(emptyActions).toBeVisible();
+  await emptyActions.getByRole("link", { name: "Reopened this week" }).click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
   await page.getByRole("link", { name: "Clear filters" }).click();
   await expect(page).toHaveURL("/admin/setup/history");
   const setupHistoryExportResponse = await page.request.get(setupHistoryExportHref ?? "");

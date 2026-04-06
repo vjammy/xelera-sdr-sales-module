@@ -729,16 +729,46 @@ export default async function SetupHistoryPage(props: {
                 </article>
               ))
             ) : (
-              <p className="text-sm leading-7 text-slate-600">
-                {providerFilter === "all" &&
-                actionFilter === "all" &&
-                actorFilter === "all" &&
-                timeFilter === "all" &&
-                sortOrder === "newest" &&
-                searchQuery.length === 0
-                  ? "No provider verification history has been recorded yet."
-                  : "No provider verification events match the current filters."}
-              </p>
+              <div className="rounded-2xl border border-slate-200 bg-white/80 p-4">
+                <p className="text-sm leading-7 text-slate-600">
+                  {providerFilter === "all" &&
+                  actionFilter === "all" &&
+                  actorFilter === "all" &&
+                  timeFilter === "all" &&
+                  sortOrder === "newest" &&
+                  searchQuery.length === 0
+                    ? "No provider verification history has been recorded yet."
+                    : "No provider verification events match the current filters."}
+                </p>
+                {providerFilter !== "all" ||
+                actionFilter !== "all" ||
+                actorFilter !== "all" ||
+                timeFilter !== "all" ||
+                sortOrder !== "newest" ||
+                pageSize !== DEFAULT_PAGE_SIZE ||
+                searchQuery.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm" data-setup-history-empty-actions>
+                    <Link href={clearFiltersHref} className="font-semibold text-teal-700 transition hover:text-teal-900">
+                      Clear filters
+                    </Link>
+                    <Link
+                      href={buildHistoryHref({
+                        providerFilter: "all",
+                        actionFilter: "reopened",
+                        actorFilter: "all",
+                        timeFilter: "7d",
+                        sortOrder: "newest",
+                        pageSize: DEFAULT_PAGE_SIZE,
+                        searchQuery: "",
+                        page: 1,
+                      })}
+                      className="font-semibold text-teal-700 transition hover:text-teal-900"
+                    >
+                      Reopened this week
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             )}
           </div>
           {filteredHistory.length ? (
