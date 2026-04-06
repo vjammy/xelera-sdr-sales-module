@@ -874,6 +874,7 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(setupChecklist).toContainText("Verify AI generation");
   await expect(setupChecklist).toContainText("Verify protected cron behavior");
   await expect(setupChecklist).toContainText("Call the cron route with the configured bearer token");
+  await expect(page.locator("[data-setup-open-history-button]")).toContainText(/Open setup history \(7d\) \(\d+\)/);
   const cronVerificationState = page.locator('[data-provider-verification-state="cron_protection"]');
   await expect(cronVerificationState).toContainText("Needs verification");
   await cronVerificationState.getByRole("button", { name: "Mark verified" }).click();

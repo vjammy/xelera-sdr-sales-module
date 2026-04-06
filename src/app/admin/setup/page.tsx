@@ -81,8 +81,9 @@ export default async function SetupPage() {
             <Link
               href="/admin/setup/history?time=7d"
               className="rounded-full border border-slate-700 px-5 py-3 text-sm font-semibold text-white transition hover:border-slate-500"
+              data-setup-open-history-button
             >
-              Open setup history (7d)
+              Open setup history (7d) ({recentHistoryCount})
             </Link>
           </div>
         </article>
