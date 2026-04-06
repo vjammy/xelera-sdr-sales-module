@@ -902,6 +902,10 @@ test("manager can see provider readiness from send operations", async ({ page })
   await verificationHistoryPreview.getByRole("link", { name: "Cron protection" }).first().click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection&time=7d/);
   await page.goto("/admin/setup#cron_protection");
+  await expect(page.locator("[data-setup-verified-week-link]")).toContainText(/Verified this week \(\d+\)/);
+  await page.locator("[data-setup-verified-week-link]").click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?action=verified&time=7d/);
+  await page.goto("/admin/setup#cron_protection");
   await expect(page.locator("[data-setup-reopened-week-link]")).toContainText(/Reopened this week \(\d+\)/);
   await page.locator("[data-setup-reopened-week-link]").click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
@@ -925,6 +929,10 @@ test("manager can see provider readiness from send operations", async ({ page })
   await setupHistoryPresets.getByRole("link", { name: /^Reopened this week/ }).click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&time=7d/);
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("last 7 days");
+  await setupHistoryPresets.getByRole("link", { name: /^Verified this week/ }).click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?action=verified&time=7d/);
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("verified actions");
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("last 7 days");
   await setupHistoryPresets.getByRole("link", { name: /^My reopened this week/ }).click();
   await expect(page).toHaveURL(

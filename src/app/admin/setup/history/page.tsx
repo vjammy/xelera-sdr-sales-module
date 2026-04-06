@@ -228,6 +228,16 @@ export default async function SetupHistoryPage(props: {
       searchQuery: "",
     },
     {
+      label: "Verified this week",
+      providerFilter: "all",
+      actionFilter: "verified",
+      actorFilter: "all",
+      timeFilter: "7d",
+      sortOrder: "newest",
+      pageSize: DEFAULT_PAGE_SIZE,
+      searchQuery: "",
+    },
+    {
       label: "My changes",
       providerFilter: "all",
       actionFilter: "all",

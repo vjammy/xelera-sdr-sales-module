@@ -33,6 +33,9 @@ export default async function SetupPage() {
   ]);
   const currentTimestamp = new Date().getTime();
   const weekAgo = new Date(currentTimestamp - 7 * 24 * 60 * 60 * 1000);
+  const verifiedThisWeekCount = verificationHistory.filter(
+    (event) => event.action === "verified" && event.createdAt >= weekAgo,
+  ).length;
   const reopenedThisWeekCount = verificationHistory.filter(
     (event) => event.action === "reopened" && event.createdAt >= weekAgo,
   ).length;
@@ -201,6 +204,13 @@ export default async function SetupPage() {
             </h2>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/admin/setup/history?action=verified&time=7d"
+              className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              data-setup-verified-week-link
+            >
+              Verified this week ({verifiedThisWeekCount})
+            </Link>
             <Link
               href="/admin/setup/history?action=reopened&time=7d"
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
