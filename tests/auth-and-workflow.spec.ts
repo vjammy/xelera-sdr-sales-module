@@ -900,6 +900,7 @@ test("manager can see provider readiness from send operations", async ({ page })
   await expect(verificationHistoryPreview).toContainText("Reopened");
   await page.getByRole("link", { name: "View full history" }).click();
   await expect(page).toHaveURL("/admin/setup/history");
+  await expect(page.locator("[data-setup-history-page-summary]")).toContainText("Page 1");
   const verificationHistory = page.locator("[data-provider-verification-history]");
   await expect(verificationHistory).toContainText("Cron protection");
   await expect(verificationHistory).toContainText("Verified");

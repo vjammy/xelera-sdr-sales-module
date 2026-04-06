@@ -18,6 +18,7 @@ const ACTION_FILTERS = [
   { value: "verified", label: "Verified" },
   { value: "reopened", label: "Reopened" },
 ] as const;
+const SETUP_HISTORY_PER_PAGE = 8;
 
 function getStatusBadgeClasses(action: string) {
   if (action === "verified") {
@@ -35,10 +36,21 @@ function normalizeActionFilter(value: string | undefined) {
   return ACTION_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
 }
 
+function normalizePageNumber(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
 function buildHistoryHref(args: {
   providerFilter: string;
   actionFilter: string;
   actorFilter: string;
+  page?: number;
   exportPath?: boolean;
 }) {
   const params = new URLSearchParams();
@@ -55,13 +67,17 @@ function buildHistoryHref(args: {
     params.set("actor", args.actorFilter);
   }
 
+  if ((args.page ?? 1) > 1) {
+    params.set("page", String(args.page));
+  }
+
   const query = params.toString();
   const basePath = args.exportPath ? "/admin/setup/history/export" : "/admin/setup/history";
   return query ? `${basePath}?${query}` : basePath;
 }
 
 export default async function SetupHistoryPage(props: {
-  searchParams?: Promise<{ provider?: string; action?: string; actor?: string }>;
+  searchParams?: Promise<{ provider?: string; action?: string; actor?: string; page?: string }>;
 }) {
   const user = await requireUser();
 
@@ -72,6 +88,7 @@ export default async function SetupHistoryPage(props: {
   const searchParams = (await props.searchParams) ?? {};
   const providerFilter = normalizeProviderFilter(searchParams.provider);
   const actionFilter = normalizeActionFilter(searchParams.action);
+  const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getProviderVerificationHistory(user.organizationId);
   const actorOptions = Array.from(
     new Map(
@@ -117,10 +134,15 @@ export default async function SetupHistoryPage(props: {
 
     return providerMatches && actionMatches && actorMatches;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / SETUP_HISTORY_PER_PAGE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const startIndex = (currentPage - 1) * SETUP_HISTORY_PER_PAGE;
+  const paginatedHistory = filteredHistory.slice(startIndex, startIndex + SETUP_HISTORY_PER_PAGE);
   const exportHref = buildHistoryHref({
     providerFilter,
     actionFilter,
     actorFilter,
+    page: currentPage,
     exportPath: true,
   });
 
@@ -187,6 +209,7 @@ export default async function SetupHistoryPage(props: {
                       providerFilter: filter.value,
                       actionFilter,
                       actorFilter,
+                      page: 1,
                     })}
                     aria-current={isActive ? "page" : undefined}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -211,6 +234,7 @@ export default async function SetupHistoryPage(props: {
                         providerFilter,
                         actionFilter: filter.value,
                         actorFilter,
+                        page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -230,6 +254,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter: "verified",
                     actorFilter,
+                    page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
                     actionFilter === "verified"
@@ -245,6 +270,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter: "reopened",
                     actorFilter,
+                    page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
                     actionFilter === "reopened"
@@ -262,6 +288,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter,
                     actorFilter: "all",
+                    page: 1,
                   })}
                   aria-current={actorFilter === "all" ? "page" : undefined}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -279,6 +306,7 @@ export default async function SetupHistoryPage(props: {
                       providerFilter,
                       actionFilter,
                       actorFilter: actor.value,
+                      page: 1,
                     })}
                     aria-current={actor.value === actorFilter ? "page" : undefined}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -294,8 +322,8 @@ export default async function SetupHistoryPage(props: {
             </div>
           </div>
           <div className="mt-5 space-y-3" data-provider-verification-events>
-            {filteredHistory.length ? (
-              filteredHistory.map((event) => (
+            {paginatedHistory.length ? (
+              paginatedHistory.map((event) => (
                 <article key={event.id} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -323,6 +351,17 @@ export default async function SetupHistoryPage(props: {
               </p>
             )}
           </div>
+          {filteredHistory.length ? (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+              <p data-setup-history-page-summary>
+                Page {currentPage} of {totalPages}
+              </p>
+              <p>
+                Showing {paginatedHistory.length} of {filteredHistory.length} matching event
+                {filteredHistory.length === 1 ? "" : "s"}.
+              </p>
+            </div>
+          ) : null}
           <div className="mt-4 flex justify-end">
             <Link
               href={exportHref}
@@ -332,6 +371,63 @@ export default async function SetupHistoryPage(props: {
               Export current view CSV
             </Link>
           </div>
+          {totalPages > 1 ? (
+            <nav className="mt-5 flex flex-wrap items-center justify-between gap-3" aria-label="Setup history pagination">
+              <Link
+                href={buildHistoryHref({
+                  providerFilter,
+                  actionFilter,
+                  actorFilter,
+                  page: Math.max(1, currentPage - 1),
+                })}
+                aria-disabled={currentPage === 1}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  currentPage === 1
+                    ? "pointer-events-none border border-slate-200 bg-slate-100 text-slate-400"
+                    : "border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                Newer events
+              </Link>
+              <div className="flex items-center gap-2 text-sm text-slate-600" data-setup-history-pagination>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                  <Link
+                    key={pageNumber}
+                    href={buildHistoryHref({
+                      providerFilter,
+                      actionFilter,
+                      actorFilter,
+                      page: pageNumber,
+                    })}
+                    aria-current={pageNumber === currentPage ? "page" : undefined}
+                    className={`rounded-full px-3 py-1.5 font-semibold transition ${
+                      pageNumber === currentPage
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {pageNumber}
+                  </Link>
+                ))}
+              </div>
+              <Link
+                href={buildHistoryHref({
+                  providerFilter,
+                  actionFilter,
+                  actorFilter,
+                  page: Math.min(totalPages, currentPage + 1),
+                })}
+                aria-disabled={currentPage === totalPages}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  currentPage === totalPages
+                    ? "pointer-events-none border border-slate-200 bg-slate-100 text-slate-400"
+                    : "border border-slate-300 bg-white text-slate-900 hover:border-slate-400 hover:bg-slate-50"
+                }`}
+              >
+                Older events
+              </Link>
+            </nav>
+          ) : null}
         </article>
       </section>
     </WorkspaceShell>
