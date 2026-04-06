@@ -913,6 +913,13 @@ test("manager can see provider readiness from send operations", async ({ page })
   const verificationEvents = page.locator("[data-provider-verification-events]");
   await expect(verificationEvents).toContainText("Cron protection");
   await expect(verificationEvents).not.toContainText("Auth sign-in email");
+  const actionFilters = page.locator("[data-provider-history-action-filters]");
+  await expect(actionFilters).toBeVisible();
+  await actionFilters.getByRole("link", { name: "Reopened" }).click();
+  await expect(page).toHaveURL(/\/admin\/setup\/history\?provider=cron_protection&action=reopened/);
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("reopened actions");
+  await expect(verificationEvents).toContainText("Reopened");
+  await expect(verificationEvents).not.toContainText("Verified");
 });
 
 test("invite hygiene cron endpoint summarizes alerts for managers", async ({ page }) => {

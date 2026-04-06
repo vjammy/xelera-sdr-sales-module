@@ -13,6 +13,11 @@ const PROVIDER_FILTERS = [
   { value: "ai_generation", label: "AI research and drafting" },
   { value: "cron_protection", label: "Cron protection" },
 ] as const;
+const ACTION_FILTERS = [
+  { value: "all", label: "All actions" },
+  { value: "verified", label: "Verified" },
+  { value: "reopened", label: "Reopened" },
+] as const;
 
 function getStatusBadgeClasses(action: string) {
   if (action === "verified") {
@@ -26,8 +31,12 @@ function normalizeProviderFilter(value: string | undefined) {
   return PROVIDER_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
 }
 
+function normalizeActionFilter(value: string | undefined) {
+  return ACTION_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
+}
+
 export default async function SetupHistoryPage(props: {
-  searchParams?: Promise<{ provider?: string }>;
+  searchParams?: Promise<{ provider?: string; action?: string }>;
 }) {
   const user = await requireUser();
 
@@ -37,9 +46,14 @@ export default async function SetupHistoryPage(props: {
 
   const searchParams = (await props.searchParams) ?? {};
   const providerFilter = normalizeProviderFilter(searchParams.provider);
+  const actionFilter = normalizeActionFilter(searchParams.action);
   const history = await getProviderVerificationHistory(user.organizationId);
-  const filteredHistory =
-    providerFilter === "all" ? history : history.filter((event) => event.providerKey === providerFilter);
+  const filteredHistory = history.filter((event) => {
+    const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
+    const actionMatches = actionFilter === "all" || event.action === actionFilter;
+
+    return providerMatches && actionMatches;
+  });
 
   return (
     <WorkspaceShell user={user}>
@@ -74,21 +88,36 @@ export default async function SetupHistoryPage(props: {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-              {providerFilter !== "all" ? (
+              {providerFilter !== "all" || actionFilter !== "all" ? (
                 <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
-                  Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"} for{" "}
-                  {PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label}.
+                  Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
+                  {providerFilter !== "all"
+                    ? ` for ${PROVIDER_FILTERS.find((option) => option.value === providerFilter)?.label}`
+                    : ""}
+                  {actionFilter !== "all"
+                    ? `${providerFilter !== "all" ? " with " : " for "}${ACTION_FILTERS.find((option) => option.value === actionFilter)?.label.toLowerCase()} actions`
+                    : ""}
+                  .
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-2" data-provider-history-filters>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2" data-provider-history-filters>
               {PROVIDER_FILTERS.map((filter) => {
                 const isActive = filter.value === providerFilter;
 
                 return (
                   <Link
                     key={filter.value}
-                    href={filter.value === "all" ? "/admin/setup/history" : `/admin/setup/history?provider=${filter.value}`}
+                    href={
+                      filter.value === "all"
+                        ? actionFilter === "all"
+                          ? "/admin/setup/history"
+                          : `/admin/setup/history?action=${actionFilter}`
+                        : actionFilter === "all"
+                          ? `/admin/setup/history?provider=${filter.value}`
+                          : `/admin/setup/history?provider=${filter.value}&action=${actionFilter}`
+                    }
                     aria-current={isActive ? "page" : undefined}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                       isActive
@@ -100,6 +129,35 @@ export default async function SetupHistoryPage(props: {
                   </Link>
                 );
               })}
+              </div>
+              <div className="flex flex-wrap gap-2" data-provider-history-action-filters>
+                {ACTION_FILTERS.map((filter) => {
+                  const isActive = filter.value === actionFilter;
+
+                  return (
+                    <Link
+                      key={filter.value}
+                      href={
+                        filter.value === "all"
+                          ? providerFilter === "all"
+                            ? "/admin/setup/history"
+                            : `/admin/setup/history?provider=${providerFilter}`
+                          : providerFilter === "all"
+                            ? `/admin/setup/history?action=${filter.value}`
+                            : `/admin/setup/history?provider=${providerFilter}&action=${filter.value}`
+                      }
+                      aria-current={isActive ? "page" : undefined}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        isActive
+                          ? "bg-slate-950 text-white"
+                          : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {filter.label}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
           <div className="mt-5 space-y-3" data-provider-verification-events>
@@ -126,9 +184,9 @@ export default async function SetupHistoryPage(props: {
               ))
             ) : (
               <p className="text-sm leading-7 text-slate-600">
-                {providerFilter === "all"
+                {providerFilter === "all" && actionFilter === "all"
                   ? "No provider verification history has been recorded yet."
-                  : "No provider verification events match the current filter."}
+                  : "No provider verification events match the current filters."}
               </p>
             )}
           </div>
