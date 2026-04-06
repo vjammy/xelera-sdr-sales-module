@@ -35,8 +35,31 @@ function normalizeActionFilter(value: string | undefined) {
   return ACTION_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
 }
 
+function buildHistoryHref(args: {
+  providerFilter: string;
+  actionFilter: string;
+  actorFilter: string;
+}) {
+  const params = new URLSearchParams();
+
+  if (args.providerFilter !== "all") {
+    params.set("provider", args.providerFilter);
+  }
+
+  if (args.actionFilter !== "all") {
+    params.set("action", args.actionFilter);
+  }
+
+  if (args.actorFilter !== "all") {
+    params.set("actor", args.actorFilter);
+  }
+
+  const query = params.toString();
+  return query ? `/admin/setup/history?${query}` : "/admin/setup/history";
+}
+
 export default async function SetupHistoryPage(props: {
-  searchParams?: Promise<{ provider?: string; action?: string }>;
+  searchParams?: Promise<{ provider?: string; action?: string; actor?: string }>;
 }) {
   const user = await requireUser();
 
@@ -48,11 +71,29 @@ export default async function SetupHistoryPage(props: {
   const providerFilter = normalizeProviderFilter(searchParams.provider);
   const actionFilter = normalizeActionFilter(searchParams.action);
   const history = await getProviderVerificationHistory(user.organizationId);
+  const actorOptions = Array.from(
+    new Map(
+      history
+        .filter((event) => event.actorEmail)
+        .map((event) => [
+          event.actorEmail as string,
+          {
+            value: event.actorEmail as string,
+            label: event.actorName === event.actorEmail ? (event.actorEmail as string) : `${event.actorName} (${event.actorEmail})`,
+          },
+        ]),
+    ).values(),
+  );
+  const actorFilter =
+    searchParams.actor && actorOptions.some((option) => option.value === searchParams.actor)
+      ? searchParams.actor
+      : "all";
   const filteredHistory = history.filter((event) => {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
+    const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
 
-    return providerMatches && actionMatches;
+    return providerMatches && actionMatches && actorMatches;
   });
 
   return (
@@ -88,7 +129,7 @@ export default async function SetupHistoryPage(props: {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-              {providerFilter !== "all" || actionFilter !== "all" ? (
+              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? (
                 <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
                   Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
                   {providerFilter !== "all"
@@ -96,6 +137,11 @@ export default async function SetupHistoryPage(props: {
                     : ""}
                   {actionFilter !== "all"
                     ? `${providerFilter !== "all" ? " with " : " for "}${ACTION_FILTERS.find((option) => option.value === actionFilter)?.label.toLowerCase()} actions`
+                    : ""}
+                  {actorFilter !== "all"
+                    ? `${providerFilter !== "all" || actionFilter !== "all" ? " by " : " for "} ${
+                        actorOptions.find((option) => option.value === actorFilter)?.label
+                      }`
                     : ""}
                   .
                 </p>
@@ -109,15 +155,11 @@ export default async function SetupHistoryPage(props: {
                 return (
                   <Link
                     key={filter.value}
-                    href={
-                      filter.value === "all"
-                        ? actionFilter === "all"
-                          ? "/admin/setup/history"
-                          : `/admin/setup/history?action=${actionFilter}`
-                        : actionFilter === "all"
-                          ? `/admin/setup/history?provider=${filter.value}`
-                          : `/admin/setup/history?provider=${filter.value}&action=${actionFilter}`
-                    }
+                    href={buildHistoryHref({
+                      providerFilter: filter.value,
+                      actionFilter,
+                      actorFilter,
+                    })}
                     aria-current={isActive ? "page" : undefined}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                       isActive
@@ -137,15 +179,11 @@ export default async function SetupHistoryPage(props: {
                   return (
                     <Link
                       key={filter.value}
-                      href={
-                        filter.value === "all"
-                          ? providerFilter === "all"
-                            ? "/admin/setup/history"
-                            : `/admin/setup/history?provider=${providerFilter}`
-                          : providerFilter === "all"
-                            ? `/admin/setup/history?action=${filter.value}`
-                            : `/admin/setup/history?provider=${providerFilter}&action=${filter.value}`
-                      }
+                      href={buildHistoryHref({
+                        providerFilter,
+                        actionFilter: filter.value,
+                        actorFilter,
+                      })}
                       aria-current={isActive ? "page" : undefined}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                         isActive
@@ -157,6 +195,41 @@ export default async function SetupHistoryPage(props: {
                     </Link>
                   );
                 })}
+              </div>
+              <div className="flex flex-wrap gap-2" data-provider-history-actor-filters>
+                <Link
+                  href={buildHistoryHref({
+                    providerFilter,
+                    actionFilter,
+                    actorFilter: "all",
+                  })}
+                  aria-current={actorFilter === "all" ? "page" : undefined}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                    actorFilter === "all"
+                      ? "bg-slate-950 text-white"
+                      : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                  }`}
+                >
+                  All actors
+                </Link>
+                {actorOptions.map((actor) => (
+                  <Link
+                    key={actor.value}
+                    href={buildHistoryHref({
+                      providerFilter,
+                      actionFilter,
+                      actorFilter: actor.value,
+                    })}
+                    aria-current={actor.value === actorFilter ? "page" : undefined}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      actor.value === actorFilter
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {actor.label}
+                  </Link>
+                ))}
               </div>
             </div>
           </div>
@@ -184,7 +257,7 @@ export default async function SetupHistoryPage(props: {
               ))
             ) : (
               <p className="text-sm leading-7 text-slate-600">
-                {providerFilter === "all" && actionFilter === "all"
+                {providerFilter === "all" && actionFilter === "all" && actorFilter === "all"
                   ? "No provider verification history has been recorded yet."
                   : "No provider verification events match the current filters."}
               </p>

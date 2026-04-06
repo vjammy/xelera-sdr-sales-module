@@ -1006,6 +1006,7 @@ export async function getProviderVerificationHistory(organizationId: string) {
       providerLabel,
       action: event.action,
       actorName: event.actor?.name ?? event.actor?.email ?? "Manager",
+      actorEmail: event.actor?.email ?? null,
       createdAt: event.createdAt,
     };
   });
