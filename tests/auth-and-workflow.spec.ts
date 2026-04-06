@@ -940,9 +940,16 @@ test("manager can see provider readiness from send operations", async ({ page })
   );
   await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("Ava Manager");
   await expect(verificationEvents).toContainText("Ava Manager");
+  const timeFilters = page.locator("[data-provider-history-time-filters]");
+  await expect(timeFilters).toBeVisible();
+  await timeFilters.getByRole("link", { name: "Last 24 hours" }).click();
+  await expect(page).toHaveURL(
+    /\/admin\/setup\/history\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
+  );
+  await expect(page.locator("[data-provider-history-filter-summary]")).toContainText("last 24 hours");
   const setupHistoryExportHref = await page.locator("[data-export-setup-history]").getAttribute("href");
   expect(setupHistoryExportHref).toMatch(
-    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai/,
+    /\/admin\/setup\/history\/export\?provider=cron_protection&action=reopened&actor=ava\.manager%40xelera\.ai&time=24h/,
   );
   const setupHistoryExportResponse = await page.request.get(setupHistoryExportHref ?? "");
   expect(setupHistoryExportResponse.ok()).toBeTruthy();

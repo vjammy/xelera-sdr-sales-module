@@ -15,6 +15,7 @@ function csvEscape(value: string | number | boolean) {
 
 const ALLOWED_PROVIDER_FILTERS = ["all", "auth_email", "outbound_email", "ai_generation", "cron_protection"] as const;
 const ALLOWED_ACTION_FILTERS = ["all", "verified", "reopened"] as const;
+const ALLOWED_TIME_FILTERS = ["all", "24h", "7d", "30d"] as const;
 const SETUP_HISTORY_PER_PAGE = 8;
 
 function normalizeProviderFilter(value: string | null) {
@@ -25,6 +26,12 @@ function normalizeProviderFilter(value: string | null) {
 
 function normalizeActionFilter(value: string | null) {
   return ALLOWED_ACTION_FILTERS.includes((value ?? "all") as (typeof ALLOWED_ACTION_FILTERS)[number])
+    ? (value ?? "all")
+    : "all";
+}
+
+function normalizeTimeFilter(value: string | null) {
+  return ALLOWED_TIME_FILTERS.includes((value ?? "all") as (typeof ALLOWED_TIME_FILTERS)[number])
     ? (value ?? "all")
     : "all";
 }
@@ -50,15 +57,25 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const providerFilter = normalizeProviderFilter(searchParams.get("provider"));
   const actionFilter = normalizeActionFilter(searchParams.get("action"));
+  const timeFilter = normalizeTimeFilter(searchParams.get("time"));
   const page = normalizePageNumber(searchParams.get("page"));
   const actorFilter = searchParams.get("actor")?.trim() || "all";
   const history = await getProviderVerificationHistory(user.organizationId);
+  const cutoffTimestamp =
+    timeFilter === "24h"
+      ? new Date(Date.now() - 24 * 60 * 60 * 1000)
+      : timeFilter === "7d"
+        ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        : timeFilter === "30d"
+          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          : null;
   const filteredHistory = history.filter((event) => {
+    const timeMatches = cutoffTimestamp === null || event.createdAt >= cutoffTimestamp;
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
 
-    return providerMatches && actionMatches && actorMatches;
+    return timeMatches && providerMatches && actionMatches && actorMatches;
   });
   const totalPages = Math.max(1, Math.ceil(filteredHistory.length / SETUP_HISTORY_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
@@ -93,6 +110,7 @@ export async function GET(request: Request) {
     "setup-history",
     providerFilter !== "all" ? providerFilter : null,
     actionFilter !== "all" ? actionFilter : null,
+    timeFilter !== "all" ? timeFilter : null,
     actorFilter !== "all" ? actorFilter.replaceAll(/[^a-z0-9@._-]+/gi, "-") : null,
     `page-${currentPage}`,
   ].filter(Boolean);

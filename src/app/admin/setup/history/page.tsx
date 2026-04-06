@@ -18,6 +18,12 @@ const ACTION_FILTERS = [
   { value: "verified", label: "Verified" },
   { value: "reopened", label: "Reopened" },
 ] as const;
+const TIME_FILTERS = [
+  { value: "all", label: "All time" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+] as const;
 const SETUP_HISTORY_PER_PAGE = 8;
 
 function getStatusBadgeClasses(action: string) {
@@ -36,6 +42,10 @@ function normalizeActionFilter(value: string | undefined) {
   return ACTION_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
 }
 
+function normalizeTimeFilter(value: string | undefined) {
+  return TIME_FILTERS.some((option) => option.value === value) ? value ?? "all" : "all";
+}
+
 function normalizePageNumber(value: string | undefined) {
   const parsed = Number.parseInt(value ?? "1", 10);
 
@@ -50,6 +60,7 @@ function buildHistoryHref(args: {
   providerFilter: string;
   actionFilter: string;
   actorFilter: string;
+  timeFilter: string;
   page?: number;
   exportPath?: boolean;
 }) {
@@ -67,6 +78,10 @@ function buildHistoryHref(args: {
     params.set("actor", args.actorFilter);
   }
 
+  if (args.timeFilter !== "all") {
+    params.set("time", args.timeFilter);
+  }
+
   if ((args.page ?? 1) > 1) {
     params.set("page", String(args.page));
   }
@@ -77,7 +92,7 @@ function buildHistoryHref(args: {
 }
 
 export default async function SetupHistoryPage(props: {
-  searchParams?: Promise<{ provider?: string; action?: string; actor?: string; page?: string }>;
+  searchParams?: Promise<{ provider?: string; action?: string; actor?: string; time?: string; page?: string }>;
 }) {
   const user = await requireUser();
 
@@ -88,6 +103,7 @@ export default async function SetupHistoryPage(props: {
   const searchParams = (await props.searchParams) ?? {};
   const providerFilter = normalizeProviderFilter(searchParams.provider);
   const actionFilter = normalizeActionFilter(searchParams.action);
+  const timeFilter = normalizeTimeFilter(searchParams.time);
   const requestedPage = normalizePageNumber(searchParams.page);
   const history = await getProviderVerificationHistory(user.organizationId);
   const actorOptions = Array.from(
@@ -113,31 +129,46 @@ export default async function SetupHistoryPage(props: {
       providerFilter: "all",
       actionFilter: "all",
       actorFilter: "all",
+      timeFilter: "all",
     },
     {
       label: "Reopened events",
       providerFilter: "all",
       actionFilter: "reopened",
       actorFilter: "all",
+      timeFilter: "all",
     },
     {
       label: "Verified events",
       providerFilter: "all",
       actionFilter: "verified",
       actorFilter: "all",
+      timeFilter: "all",
     },
     {
       label: "My changes",
       providerFilter: "all",
       actionFilter: "all",
       actorFilter: user.email,
+      timeFilter: "all",
     },
   ];
+  const currentTimestamp = new Date().getTime();
+  const cutoffTimestamp =
+    timeFilter === "24h"
+      ? new Date(currentTimestamp - 24 * 60 * 60 * 1000)
+      : timeFilter === "7d"
+        ? new Date(currentTimestamp - 7 * 24 * 60 * 60 * 1000)
+        : timeFilter === "30d"
+          ? new Date(currentTimestamp - 30 * 24 * 60 * 60 * 1000)
+          : null;
+  const timeScopedHistory = cutoffTimestamp ? history.filter((event) => event.createdAt >= cutoffTimestamp) : history;
   const providerActorScopedHistory = history.filter((event) => {
+    const timeMatches = cutoffTimestamp === null || event.createdAt >= cutoffTimestamp;
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
 
-    return providerMatches && actorMatches;
+    return timeMatches && providerMatches && actorMatches;
   });
   const actionSummary = providerActorScopedHistory.reduce(
     (summary, event) => {
@@ -153,7 +184,7 @@ export default async function SetupHistoryPage(props: {
     },
     { verified: 0, reopened: 0 },
   );
-  const filteredHistory = history.filter((event) => {
+  const filteredHistory = timeScopedHistory.filter((event) => {
     const providerMatches = providerFilter === "all" || event.providerKey === providerFilter;
     const actionMatches = actionFilter === "all" || event.action === actionFilter;
     const actorMatches = actorFilter === "all" || event.actorEmail === actorFilter;
@@ -168,6 +199,7 @@ export default async function SetupHistoryPage(props: {
     providerFilter,
     actionFilter,
     actorFilter,
+    timeFilter,
     page: currentPage,
     exportPath: true,
   });
@@ -205,7 +237,7 @@ export default async function SetupHistoryPage(props: {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-slate-500">Recent Events</p>
-              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? (
+              {providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" || timeFilter !== "all" ? (
                 <p className="mt-2 text-sm text-slate-600" data-provider-history-filter-summary>
                   Showing {filteredHistory.length} event{filteredHistory.length === 1 ? "" : "s"}
                   {providerFilter !== "all"
@@ -217,6 +249,11 @@ export default async function SetupHistoryPage(props: {
                   {actorFilter !== "all"
                     ? `${providerFilter !== "all" || actionFilter !== "all" ? " by " : " for "} ${
                         actorOptions.find((option) => option.value === actorFilter)?.label
+                      }`
+                    : ""}
+                  {timeFilter !== "all"
+                    ? `${providerFilter !== "all" || actionFilter !== "all" || actorFilter !== "all" ? " in " : " for "}${
+                        TIME_FILTERS.find((option) => option.value === timeFilter)?.label?.toLowerCase() ?? "selected range"
                       }`
                     : ""}
                   .
@@ -235,6 +272,7 @@ export default async function SetupHistoryPage(props: {
                       providerFilter: filter.value,
                       actionFilter,
                       actorFilter,
+                      timeFilter,
                       page: 1,
                     })}
                     aria-current={isActive ? "page" : undefined}
@@ -260,6 +298,7 @@ export default async function SetupHistoryPage(props: {
                         providerFilter,
                         actionFilter: filter.value,
                         actorFilter,
+                        timeFilter,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -280,6 +319,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter: "verified",
                     actorFilter,
+                    timeFilter,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -296,6 +336,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter: "reopened",
                     actorFilter,
+                    timeFilter,
                     page: 1,
                   })}
                   className={`rounded-2xl border px-3 py-2 text-sm transition ${
@@ -313,7 +354,8 @@ export default async function SetupHistoryPage(props: {
                   const isActive =
                     preset.providerFilter === providerFilter &&
                     preset.actionFilter === actionFilter &&
-                    preset.actorFilter === actorFilter;
+                    preset.actorFilter === actorFilter &&
+                    preset.timeFilter === timeFilter;
 
                   return (
                     <Link
@@ -322,6 +364,7 @@ export default async function SetupHistoryPage(props: {
                         providerFilter: preset.providerFilter,
                         actionFilter: preset.actionFilter,
                         actorFilter: preset.actorFilter,
+                        timeFilter: preset.timeFilter,
                         page: 1,
                       })}
                       aria-current={isActive ? "page" : undefined}
@@ -342,6 +385,7 @@ export default async function SetupHistoryPage(props: {
                     providerFilter,
                     actionFilter,
                     actorFilter: "all",
+                    timeFilter,
                     page: 1,
                   })}
                   aria-current={actorFilter === "all" ? "page" : undefined}
@@ -360,6 +404,7 @@ export default async function SetupHistoryPage(props: {
                       providerFilter,
                       actionFilter,
                       actorFilter: actor.value,
+                      timeFilter,
                       page: 1,
                     })}
                     aria-current={actor.value === actorFilter ? "page" : undefined}
@@ -372,6 +417,32 @@ export default async function SetupHistoryPage(props: {
                     {actor.label}
                   </Link>
                 ))}
+              </div>
+              <div className="flex flex-wrap gap-2" data-provider-history-time-filters>
+                {TIME_FILTERS.map((filter) => {
+                  const isActive = filter.value === timeFilter;
+
+                  return (
+                    <Link
+                      key={filter.value}
+                      href={buildHistoryHref({
+                        providerFilter,
+                        actionFilter,
+                        actorFilter,
+                        timeFilter: filter.value,
+                      page: 1,
+                    })}
+                    aria-current={isActive ? "page" : undefined}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-slate-950 text-white"
+                        : "border border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    {filter.label}
+                  </Link>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -399,7 +470,7 @@ export default async function SetupHistoryPage(props: {
               ))
             ) : (
               <p className="text-sm leading-7 text-slate-600">
-                {providerFilter === "all" && actionFilter === "all" && actorFilter === "all"
+                {providerFilter === "all" && actionFilter === "all" && actorFilter === "all" && timeFilter === "all"
                   ? "No provider verification history has been recorded yet."
                   : "No provider verification events match the current filters."}
               </p>
@@ -432,6 +503,7 @@ export default async function SetupHistoryPage(props: {
                   providerFilter,
                   actionFilter,
                   actorFilter,
+                  timeFilter,
                   page: Math.max(1, currentPage - 1),
                 })}
                 aria-disabled={currentPage === 1}
@@ -451,6 +523,7 @@ export default async function SetupHistoryPage(props: {
                       providerFilter,
                       actionFilter,
                       actorFilter,
+                      timeFilter,
                       page: pageNumber,
                     })}
                     aria-current={pageNumber === currentPage ? "page" : undefined}
@@ -469,6 +542,7 @@ export default async function SetupHistoryPage(props: {
                   providerFilter,
                   actionFilter,
                   actorFilter,
+                  timeFilter,
                   page: Math.min(totalPages, currentPage + 1),
                 })}
                 aria-disabled={currentPage === totalPages}
