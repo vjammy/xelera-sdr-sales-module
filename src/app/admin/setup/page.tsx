@@ -36,6 +36,7 @@ export default async function SetupPage() {
   const reopenedThisWeekCount = verificationHistory.filter(
     (event) => event.action === "reopened" && event.createdAt >= weekAgo,
   ).length;
+  const recentHistoryCount = verificationHistory.filter((event) => event.createdAt >= weekAgo).length;
   const myReopenedThisWeekCount = verificationHistory.filter(
     (event) => event.action === "reopened" && event.createdAt >= weekAgo && event.actorEmail === user.email,
   ).length;
@@ -216,8 +217,9 @@ export default async function SetupPage() {
             <Link
               href="/admin/setup/history?time=7d"
               className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+              data-setup-recent-history-link
             >
-              View recent history (7d)
+              View recent history (7d) ({recentHistoryCount})
             </Link>
           </div>
         </div>

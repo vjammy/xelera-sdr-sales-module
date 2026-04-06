@@ -909,7 +909,8 @@ test("manager can see provider readiness from send operations", async ({ page })
   await page.locator("[data-setup-my-reopened-week-link]").click();
   await expect(page).toHaveURL(/\/admin\/setup\/history\?action=reopened&actor=ava\.manager%40xelera\.ai&time=7d/);
   await page.goto("/admin/setup#cron_protection");
-  await page.getByRole("link", { name: "View recent history (7d)" }).click();
+  await expect(page.locator("[data-setup-recent-history-link]")).toContainText(/View recent history \(7d\) \(\d+\)/);
+  await page.locator("[data-setup-recent-history-link]").click();
   await expect(page).toHaveURL("/admin/setup/history?time=7d");
   await expect(page.locator("[data-setup-history-page-summary]")).toContainText("Page 1");
   const verificationHistory = page.locator("[data-provider-verification-history]");
