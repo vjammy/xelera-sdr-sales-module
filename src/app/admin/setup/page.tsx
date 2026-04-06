@@ -190,12 +190,20 @@ export default async function SetupPage() {
               Recent provider verification changes
             </h2>
           </div>
-          <Link
-            href="/admin/setup/history?time=7d"
-            className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
-          >
-            View recent history (7d)
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/admin/setup/history?action=reopened&time=7d"
+              className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+            >
+              Reopened this week
+            </Link>
+            <Link
+              href="/admin/setup/history?time=7d"
+              className="text-sm font-semibold text-teal-700 transition hover:text-teal-900"
+            >
+              View recent history (7d)
+            </Link>
+          </div>
         </div>
         <div className="mt-5 space-y-3" data-provider-verification-history-preview>
           {verificationHistory.slice(0, 4).length ? (
